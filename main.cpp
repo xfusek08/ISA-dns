@@ -8,12 +8,18 @@
  */
 /******************************************************************************/
 
+#define DEFAULT_STATISTIC_TIME  60
+
 #include <iostream>
+#include <string>
+#include <sstream>
+#include <unistd.h>
+
 #include "utils.hpp"
+#include "pcapFileProcessor.hpp"
 
 using namespace std;
 using namespace utils;
-
 
 /* Display program help */
 void printHelp()
@@ -39,48 +45,64 @@ void printHelp()
   ;
 }
 
-void parseOptions(int argc, char * const argv[]) {
+ProgramOptions parseOptions(int argc, char * const argv[]) {
   if (argc < 2) {
-    cerr << "Program expects parameters.\n";
+    cerr << "Program expects parameters." << endl << endl;
     printHelp();
     raiseError();
   }
-  (void)argc;
-  (void)argv;
-  //   // process loop from getopt manual page
-  // int opt = 0;
-  // while ((opt = getopt(argc - 1, &(argv[1]), "h:p:s:t:")) != -1)
-  // {
-  //   switch (opt)
-  //   {
-  //     case 'h':
-  //       glbop_hostAddrStr = optarg;
-  //       break;
-  //     case 'p':
-  //       if (!util_strToPort(optarg, &glbop_portNum, true))
-  //         util_raiseError(NULL);
-  //       break;
-  //     case 's':
-  //       if (!util_strToULong(optarg, &glbop_probeSize))
-  //         util_raiseError("Not valid probe size value");
-  //       break;
-  //     case 't':
-  //       if (!util_strToULong(optarg, &glbop_uMeasureTime))
-  //         util_raiseError("Not valid measurement time value");
-  //       break;
-  //     default: // error mesages of unknown options handles getopt function
-  //       exit(EXIT_FAILURE);
-  //   }
-  // }
-  // if (glbop_portNum == 0)
-  //   util_raiseError("Unspecified port.");
-  // if (glbop_probeSize == 0)
-  //   util_raiseError("Unspecified probe size.");
-  // if (glbop_uMeasureTime == 0)
-  //   util_raiseError("Unspecified measurement time.");
+
+  // search argument for help option
+  for (int i = 0; i < argc; ++i) {
+    string actArgument(argv[i]);
+    if (actArgument == "--help" || actArgument == "-h") {
+      printHelp();
+      raiseError();
+    }
+  }
+
+  ProgramOptions resultOptions = {
+    false, false, false,
+    "", "", "", DEFAULT_STATISTIC_TIME
+  };
+
+  int opt = 0;
+  while ((opt = getopt(argc, argv, "r:i:s:t:")) != -1) {
+    switch (opt) {
+      case 'r': resultOptions.isPcapFile = true;           resultOptions.pcapFileName        = optarg; break;
+      case 'i': resultOptions.isInterface = true;          resultOptions.interface           = optarg; break;
+      case 's': resultOptions.isSyslogserveAddress = true; resultOptions.syslogServerAddress = optarg; break;
+      case 't': { // brackets because long value after case label
+        long value = strtol(optarg, nullptr, 10);
+        if (value <= 0)
+          raiseErrorStream("For paramter -t \"" << optarg << "\" is not a valid whole positive number\n");
+        resultOptions.sendTimeIntervalSec = value;
+      } break;
+      default:
+        raiseError();
+    }
+  }
+
+  return resultOptions;
 }
 
 int main(int argc, char * const argv[]) {
-  parseOptions(argc, argv);
+  ProgramOptions progOptions = parseOptions(argc, argv);
+  DWRITE(endl <<
+    "Option values:" << endl <<
+    "  Pcap file:             " << progOptions.pcapFileName        << endl <<
+    "  Interface:             " << progOptions.interface           << endl <<
+    "  Syslog server address: " << progOptions.syslogServerAddress << endl <<
+    "  Send interval seconds: " << progOptions.sendTimeIntervalSec << endl
+  );
+
+  if (progOptions.isPcapFile) {
+    switch (processPcapFile(progOptions)) {
+      case PCAPFILE_RESULT_FEMPTY:          raiseError("Pcap file name is empty.");                                        break;
+      case PCAPFILE_RESULT_FNOTFOUND: raiseErrorStream("Pcap file \"" << progOptions.pcapFileName << "\" was not found."); break;
+      case PCAPFILE_RESULT_OK:                  DWRITE("Pcap file was successfully processed");                            break;
+    }
+  }
+
   return 0;
 }

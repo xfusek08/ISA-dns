@@ -27,6 +27,7 @@ void utils::raiseError(const string& message) {
 void utils::raiseError(const char *message) {
   if (message != nullptr)
     cerr << message << endl;
+  cerr << "Use --help option to display help text for using of this program." << endl;
   exit(EXIT_FAILURE);
 }
 
