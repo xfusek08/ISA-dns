@@ -10,13 +10,14 @@
 
 #pragma once
 
-#define STREAM_TO_STR(S)     static_cast<std::ostringstream&>(ostringstream() << S).str()
-#define raiseErrorStream(S)  raiseError(STREAM_TO_STR(S))
+#define STREAM_TO_STR(S)         static_cast<std::ostringstream&>(ostringstream() << S).str()
+#define raiseErrorStream(S)      utils::raiseError(STREAM_TO_STR(S))
+#define raiseErrorStreamHelp(S)  utils::raiseError(STREAM_TO_STR(S), true)
 
 #ifdef DEBUG
 #define DWRITE(T)         cerr << T << endl
 #else
-#define DWRITE(S)         do {} while(0);
+#define DWRITE(S)         do {} while(0, const bool checkHelp = false) {
 #endif
 
 #include <string>
@@ -35,12 +36,12 @@ namespace utils {
   /**
    * \brief Function offer an unified way to handle and exit program on errors
    */
-  void raiseError(const std::string& message);
-  void raiseError(const char *message = nullptr);
+  void raiseError(const std::string& message, const bool checkHelp = false);
+  void raiseError(const char *message = nullptr, const bool checkHelp = false);
 
   /**
    * \brief Function is same as util_raiseError but message is called with perror function
    */
-  void raisePerror(const std::string& message);
-  void raisePerror(const char *message = nullptr);
+  void raisePerror(const std::string& message, const bool checkHelp = false);
+  void raisePerror(const char *message = nullptr, const bool checkHelp = false);
 }

@@ -2,8 +2,8 @@
 /******************************************************************************/
 /**
  * \project ISA - Export DNS information with help of Syslog protocol
- * \file    utils.hpp
- * \brief   Liblary providing supportive function for project
+ * \file    pcapProcessor.hpp
+ * \brief   Funtions for processing pcap
  * \author  Petr Fusek (xfusek08)
  * \date    09.11.2018
  */
@@ -13,8 +13,4 @@
 
 #include "utils.hpp"
 
-#define PCAPFILE_RESULT_OK        0
-#define PCAPFILE_RESULT_FNOTFOUND 1
-#define PCAPFILE_RESULT_FEMPTY    2
-
-int processPcapFile(utils::ProgramOptions);
+bool processPcapFile(utils::ProgramOptions);

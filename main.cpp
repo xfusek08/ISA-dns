@@ -16,7 +16,7 @@
 #include <unistd.h>
 
 #include "utils.hpp"
-#include "pcapFileProcessor.hpp"
+#include "pcapProcessor.hpp"
 
 using namespace std;
 using namespace utils;
@@ -24,25 +24,7 @@ using namespace utils;
 /* Display program help */
 void printHelp()
 {
-  cout <<
-    "help\n"
-    // "\nProgram \"ipk-mtrip\" - Bandwidth Measurement.\n"
-    // "Mesure Bandwidth between two points in internet.\n"
-    // "It can be run in two modes \"REFLECTOR\" and \"METER\".\n"
-    // "\n"
-    // "REFLECTOR:\n"
-    // "\tipk-mtrip reflect -p port \n"
-    // "\n"
-    // "\t\tport\t- Port number on which reflector will listen.\n"
-    // "\n"
-    // "METER:\n"
-    // "\tipk-mtrip meter -h far_host -p far_port - s probe_size -t mesure_time\n"
-    // "\n"
-    // "\t\tfar_host\t- Domain name or ip address of reflector.\n"
-    // "\t\tfar_port\t- Port on which reflector is running.\n"
-    // "\t\tprobe_size\t- Size of one probe packet in bytes. (0 < tprobe_size < 60000)\n"
-    // "\t\tmesure_time\t- Time of measurement in seconds. (tmesure_time > 0)\n"
-  ;
+  cout << "help" << endl;
 }
 
 ProgramOptions parseOptions(int argc, char * const argv[]) {
@@ -75,11 +57,11 @@ ProgramOptions parseOptions(int argc, char * const argv[]) {
       case 't': { // brackets because long value after case label
         long value = strtol(optarg, nullptr, 10);
         if (value <= 0)
-          raiseErrorStream("For paramter -t \"" << optarg << "\" is not a valid whole positive number\n");
+          raiseErrorStreamHelp("For paramter -t \"" << optarg << "\" is not a valid whole positive number\n");
         resultOptions.sendTimeIntervalSec = value;
       } break;
       default:
-        raiseError();
+        raiseError(nullptr, true);
     }
   }
 
@@ -97,11 +79,8 @@ int main(int argc, char * const argv[]) {
   );
 
   if (progOptions.isPcapFile) {
-    switch (processPcapFile(progOptions)) {
-      case PCAPFILE_RESULT_FEMPTY:          raiseError("Pcap file name is empty.");                                        break;
-      case PCAPFILE_RESULT_FNOTFOUND: raiseErrorStream("Pcap file \"" << progOptions.pcapFileName << "\" was not found."); break;
-      case PCAPFILE_RESULT_OK:                  DWRITE("Pcap file was successfully processed");                            break;
-    }
+    if (!processPcapFile(progOptions))
+      raiseError();
   }
 
   return 0;

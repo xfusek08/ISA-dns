@@ -1,5 +1,5 @@
 
-CFLAGS = -std=c++11 -Wall -Wextra -Werror
+CFLAGS = -std=c++11 -Wall -Wextra -Werror -lpcap
 COMPILER = g++
 EXECUTABLE = dns-export
 SOURCES = $(wildcard *.cpp) $(wildcard */*.cpp)

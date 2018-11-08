@@ -16,34 +16,35 @@
 using namespace std;
 
 /* raiseError */
-void utils::raiseError(const string& message) {
+void utils::raiseError(const string& message, const bool checkHelp) {
   if (message.empty())
-    utils::raiseError();
+    utils::raiseError(nullptr, checkHelp);
   else
-    utils::raiseError(message.c_str());
+    utils::raiseError(message.c_str(), checkHelp);
 }
 
 /* raiseError - override */
-void utils::raiseError(const char *message) {
+void utils::raiseError(const char *message, const bool checkHelp) {
   if (message != nullptr)
     cerr << message << endl;
-  cerr << "Use --help option to display help text for using of this program." << endl;
+  if (checkHelp)
+    cerr << "Use --help option to display help text for using of this program." << endl;
   exit(EXIT_FAILURE);
 }
 
 /* raisePerror */
-void utils::raisePerror(const string& message) {
+void utils::raisePerror(const string& message, const bool checkHelp) {
   if (message.empty())
-    utils::raisePerror();
+    utils::raisePerror(nullptr, checkHelp);
   else
-    utils::raisePerror(message.c_str());
+    utils::raisePerror(message.c_str(), checkHelp);
 }
 
 /* raisePerror - override*/
-void utils::raisePerror(const char *message) {
+void utils::raisePerror(const char *message, const bool checkHelp) {
   if (message != nullptr)
     perror(message);
   else
     perror("");
-  utils::raiseError();
+  utils::raiseError(nullptr, checkHelp);
 }
