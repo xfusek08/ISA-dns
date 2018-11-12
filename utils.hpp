@@ -4,7 +4,7 @@
  * \file    pcapFileProcessor.hpp
  * \brief   Liblary providing supportive function for project
  * \author  Petr Fusek (xfusek08)
- * \date    09.11.2018
+ * \date    19.11.1018
  */
 /******************************************************************************/
 
@@ -15,9 +15,11 @@
 #define raiseErrorStreamHelp(S)  utils::raiseError(STREAM_TO_STR(S), true)
 
 #ifdef DEBUG
-#define DWRITE(T)         cerr << T << endl
+#define DWRITE(T)             cerr << T << endl
+#define DPRINTF(T, args ...)  fprintf(stderr, T, args)
 #else
-#define DWRITE(S)         do {} while(0, const bool checkHelp = false) {
+#define DWRITE(S)             do {} while(0)
+#define DPRINTF(T, args ...)  do {} while(0)
 #endif
 
 #include <string>

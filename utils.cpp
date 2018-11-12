@@ -4,7 +4,7 @@
  * \file    utils.cpp
  * \brief   Liblary providing supportive function for project
  * \author  Petr Fusek (xfusek08)
- * \date    09.11.2018
+ * \date    19.11.1018
  */
 /******************************************************************************/
 

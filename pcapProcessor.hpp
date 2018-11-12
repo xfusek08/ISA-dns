@@ -3,9 +3,9 @@
 /**
  * \project ISA - Export DNS information with help of Syslog protocol
  * \file    pcapProcessor.hpp
- * \brief   Funtions for processing pcap
+ * \brief
  * \author  Petr Fusek (xfusek08)
- * \date    09.11.2018
+ * \date    19.11.1018
  */
 /******************************************************************************/
 

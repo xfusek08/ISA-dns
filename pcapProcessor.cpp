@@ -2,15 +2,16 @@
 /**
  * \project ISA - Export DNS information with help of Syslog protocol
  * \file    pcapProcessor.cpp
- * \brief   Liblary providing supportive function for project
+ * \brief
  * \author  Petr Fusek (xfusek08)
- * \date    09.11.2018
+ * \date    19.11.1018
  */
 /******************************************************************************/
 
 #include <iostream>
 #include <string>
 
+#include <string.h>
 #include <pcap/pcap.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -23,13 +24,13 @@
 
 #include "utils.hpp"
 #include "pcapProcessor.hpp"
+#include "dnsStatistics.hpp"
 
 #define SIZE_ETHERNET (14)
-#define DNS_PACKET_FILTER_EXP "port 53"
+#define DNS_PACKET_FILTER_EXP "(dst port 53) or (src port 53)"
 
 using namespace std;
 using namespace utils;
-
 
 pcap_t *openPcapFile(const string& filename) {
   DWRITE("openPcapFile()");
@@ -80,49 +81,56 @@ bool processPcap(pcap_t *pcapHandle, const string& deviceName, const string& fil
   struct pcap_pkthdr actPcapPacketHeader;
   u_int size_ip;
   struct ip *my_ip;
+  struct tcphdr *my_tcp;
+  struct udphdr *my_udp;
   int n = 0;
   while ((packet = pcap_next(pcapHandle, &actPcapPacketHeader)) != NULL) {
-    printf("Packet no. %d:\n", ++n);
-    printf("\tLength %d, received at %s", actPcapPacketHeader.len, ctime((const time_t *)&actPcapPacketHeader.ts.tv_sec));
+    DPRINTF("\nPacket no. %d:\n", ++n);
+    // DPRINTF("\tLength %d, received at %s", actPcapPacketHeader.len, ctime((const time_t *)&actPcapPacketHeader.ts.tv_sec));
 
     // read the Ethernet header
     struct ether_header *eptr = (struct ether_header *)packet;
-    printf("\tSource MAC: %s\n", ether_ntoa((const struct ether_addr *)&eptr->ether_shost));
-    printf("\tDestination MAC: %s\n\t", ether_ntoa((const struct ether_addr *)&eptr->ether_dhost));
+    // DPRINTF("\tSource MAC: %s\n", ether_ntoa((const struct ether_addr *)&eptr->ether_shost));
+    // DPRINTF("\tDestination MAC: %s\n\t", ether_ntoa((const struct ether_addr *)&eptr->ether_dhost));
     switch (ntohs(eptr->ether_type))
     {                  // see /usr/include/net/ethernet.h for types
       case ETHERTYPE_IP: // IPv4 packet
-        printf("Ethernet type is  0x%x, i.e. IP packet \n", ntohs(eptr->ether_type));
+        // DPRINTF("Ethernet type is  0x%x, i.e. IP packet \n", ntohs(eptr->ether_type));
         my_ip = (struct ip *)(packet + SIZE_ETHERNET); // skip Ethernet header
         size_ip = my_ip->ip_hl * 4;                    // length of IP header
 
-        printf("\tIP: id 0x%x, hlen %d bytes, version %d, total length %d bytes, TTL %d\n", ntohs(my_ip->ip_id), size_ip, my_ip->ip_v, ntohs(my_ip->ip_len), my_ip->ip_ttl);
-        printf("\tIP src = %s, ", inet_ntoa(my_ip->ip_src));
-        printf("IP dst = %s\n\t", inet_ntoa(my_ip->ip_dst));
+        // DPRINTF("\tIP: id 0x%x, hlen %d bytes, version %d, total length %d bytes, TTL %d\n", ntohs(my_ip->ip_id), size_ip, my_ip->ip_v, ntohs(my_ip->ip_len), my_ip->ip_ttl);
+        DPRINTF("IP src = %s, ", inet_ntoa(my_ip->ip_src));
+        DPRINTF("IP dst = %s\n", inet_ntoa(my_ip->ip_dst));
 
         switch (my_ip->ip_p)
         {
           case 2: // IGMP protocol
-            printf("protocol IGMP (%d)\n", my_ip->ip_p);
+            DPRINTF("protocol IGMP (%d); ", my_ip->ip_p);
             break;
           case 6: // TCP protocol
-            printf("protocol TCP (%d)\n", my_ip->ip_p);
+            DPRINTF("protocol TCP (%d); ", my_ip->ip_p);
+            my_tcp = (struct tcphdr *) (packet+SIZE_ETHERNET+size_ip); // pointer to the TCP header
+            DPRINTF("Src port = %d, dst port = %d, seq = %u",ntohs(my_tcp->source), ntohs(my_tcp->dest), ntohl(my_tcp->seq));
             break;
           case 17: // UDP protocol
-            printf("protocol UDP (%d)\n", my_ip->ip_p);
+            DPRINTF("protocol UDP (%d); ", my_ip->ip_p);
+            my_udp = (struct udphdr *) (packet+SIZE_ETHERNET+size_ip); // pointer to the UDP header
+            DPRINTF("Src port = %d, dst port = %d, length %d\n",ntohs(my_udp->source), ntohs(my_udp->dest), ntohs(my_udp->len));
+            resolveDnsResponsePacket(packet+SIZE_ETHERNET+size_ip+sizeof(struct udphdr));
             break;
           default:
-            printf("protocol %d\n", my_ip->ip_p);
+            DPRINTF("protocol %d\n", my_ip->ip_p);
         }
         break;
       case ETHERTYPE_IPV6: // IPv6
-        printf("Ethernet type is 0x%x, i.e., IPv6 packet\n", ntohs(eptr->ether_type));
+        DPRINTF("Ethernet type is 0x%x, i.e., IPv6 packet\n", ntohs(eptr->ether_type));
         break;
       case ETHERTYPE_ARP: // ARP
-        printf("Ethernet type is 0x%x, i.e., ARP packet\n", ntohs(eptr->ether_type));
+        DPRINTF("Ethernet type is 0x%x, i.e., ARP packet\n", ntohs(eptr->ether_type));
         break;
       default:
-        printf("Ethernet type 0x%x, not IPv4\n", ntohs(eptr->ether_type));
+        DPRINTF("Ethernet type 0x%x, not IPv4\n", ntohs(eptr->ether_type));
     }
   }
 
