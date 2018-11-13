@@ -10,7 +10,7 @@ OBJS = $(sort $(patsubst %.cpp,%.o,$(SOURCES)))
 all: clean $(EXECUTABLE) clean
 
 #setting debug flags
-debug: CFLAGS += -g -DDEBUG #-DST_DEBUG #-DPRECDEBUG
+debug: CFLAGS += -g -DDEBUG -DHEADERS
 debug: $(EXECUTABLE) clean
 
 %.o : %.cpp

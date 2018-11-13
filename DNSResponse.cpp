@@ -28,15 +28,14 @@ using namespace std;
 #define DNS_ASWER_HEADER_SIZE (12)
 
 // DNS Types
-#define DNS_RECTYPE_A                1  // a host address
+#define DNS_RECTYPE_A                1 // a host address
 #define DNS_RECTYPE_NS               2 // an authoritative name server
-#define DNS_RECTYPE_AAAA            28 // an authoritative name server
+#define DNS_RECTYPE_AAAA            28 // IPv6 result
 #define DNS_RECTYPE_CNAME            5 // the canonical name for an alias
 #define DNS_RECTYPE_MX              15 // mail exchange
 #define DNS_RECTYPE_SOA              6 // marks the start of a zone of authority
 #define DNS_RECTYPE_TXT             16 // text strings
 #define DNS_RECTYPE_SPF             99 // Sender Policy Framework
-
 
 bool DNSResponse::parse(const unsigned char *packet) {
 
@@ -48,9 +47,19 @@ bool DNSResponse::parse(const unsigned char *packet) {
   _beginOfPacket = (unsigned char *)packet;
 
   SDnsHeader mainHeader = parseDnsHeader(_beginOfPacket);
+  // check if header is reasonable
+  if ((mainHeader.flags & 0x7f) != 0) // check of rezerved zeros and zero error codes
+    return false;
+  if ((mainHeader.flags & 0x8000) == 0) // we care only about responses
+    return false;
+  // rought data check: we procceds if amount of data is reasoneble and fits to 1500
+  if (mainHeader.questions > 100 ||
+      mainHeader.ansversRRs > 100 ||
+      mainHeader.authorityRRs > 100 ||
+      mainHeader.additionalRRs > 100 )
+    return false;
   if (mainHeader.ansversRRs < 1) // nothing to do if there arent any ansvers
-    return true;
-
+    return false;
   if (!resolveAnswes(mainHeader.ansversRRs))
     return false; // error
 
@@ -69,6 +78,10 @@ bool DNSResponse::resolveAnswes(unsigned short count) {
 
   for (int i = 0; i < count; ++i) {
     SDNSAnswerHeader ansHeader = parseDNSAnswerHeader(actPointerToPacket);
+    // check if header is reasonable
+    if (ansHeader.recClass != 1 || ansHeader.dataLen > 1400)
+      return false;
+
     SDNSAnswerRecord answerRec = createAnswerRecord(ansHeader, actPointerToPacket);
 
     answers.push_back(answerRec);
@@ -81,7 +94,7 @@ SDnsHeader DNSResponse::parseDnsHeader(const unsigned char *firstCharOfHeader) {
   SDnsHeader *header = (SDnsHeader *)firstCharOfHeader;
   SDnsHeader res = {
     ntohs(header->transactionID),
-    header->flags,
+    ntohs(header->flags),
     ntohs(header->questions),
     ntohs(header->ansversRRs),
     ntohs(header->authorityRRs),
@@ -123,7 +136,7 @@ SDNSAnswerHeader DNSResponse::parseDNSAnswerHeader(const unsigned char *firstCha
     ntohs(header->domainNameOffset),
     ntohs(header->type),
     ntohs(header->recClass),
-    ntohs(header->timeToLive),
+    ntohl(*(__u32 *)(firstCharOfHeader + 6)),
     ntohs(*datalen)
   };
 
@@ -205,9 +218,12 @@ SDNSAnswerRecord DNSResponse::createAnswerRecord(SDNSAnswerHeader answerHeader, 
     case DNS_RECTYPE_NS:
       resultRecord.typeString = "NS";
       break;
-    case DNS_RECTYPE_AAAA:
+    case DNS_RECTYPE_AAAA: {
       resultRecord.typeString = "AAAA";
-      break;
+      struct in6_addr *address = (struct in6_addr *)(actPointerToAnswer + DNS_ASWER_HEADER_SIZE);
+      char buff[INET6_ADDRSTRLEN];
+      resultRecord.translatedName = string(inet_ntop(AF_INET6, address, buff, INET6_ADDRSTRLEN));
+    } break;
     case DNS_RECTYPE_CNAME:
       resultRecord.typeString = "CNAME";
       // to next function we need to calculate offset of data from the begining of the packet
@@ -215,6 +231,8 @@ SDNSAnswerRecord DNSResponse::createAnswerRecord(SDNSAnswerHeader answerHeader, 
       break;
     case DNS_RECTYPE_MX:
       resultRecord.typeString = "MX";
+      // same as in CNAME + 2 bytes of preference
+      resultRecord.translatedName  = readDomainName(actPointerToAnswer - _beginOfPacket + DNS_ASWER_HEADER_SIZE + 2);
       break;
     case DNS_RECTYPE_SOA:
       resultRecord.typeString = "SOA";

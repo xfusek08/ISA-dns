@@ -77,6 +77,40 @@ bool compileAndSetFilter(pcap_t *pcapHandle, bpf_u_int32 *net, const string& fil
   return true;
 }
 
+unsigned int getTcpHeaderSize(struct tcphdr *my_tcp) {
+  // header len is in 4 bits after source (2B), dest(2B), seq (4B) and akc (4B) -> (12B in total)
+  unsigned char headerLen = ((unsigned char *)my_tcp)[12];
+  // we want value in top 4 bits
+  unsigned int res = headerLen >> 4;
+  // value means number of 4B words in header in total
+  res = res * 4;
+
+  DPRINTF("Src port = %d, dst port = %d, header len: %02x %uB\n", ntohs(my_tcp->source), ntohs(my_tcp->dest), headerLen, res);
+
+  // for (int i = 0; i < 16; ++i) {
+  //   fprintf(stderr, "%02x ", ((unsigned char *)my_tcp)[i]);
+  //   if ((i + 1) % 4 == 0)
+  //     fprintf(stderr, "\n");
+  // }
+  // fprintf(stderr, "\n");
+  return res;
+}
+
+/* returns true if in tcp header is specified PUSH flag */
+bool isTcpMessageSegmented(struct tcphdr *my_tcp) {
+  // 0x8 means PUHS mask 0000 1000
+  return ((((unsigned char *)my_tcp)[12]) & 0x8) > 0;
+}
+
+void parseDnsData(const unsigned char *firstCharOfData, DNSResponse *respObj, std::shared_ptr<DNSStatistic> statObj) {
+  if (respObj->parse(firstCharOfData)) {
+    statObj->addAnswerRecords(respObj->answers);
+    DWRITE("records parsed: " << respObj->answers.size());
+  } else {
+    DWRITE("corrupted -> dumped");
+  }
+}
+
 bool processPcap(pcap_t *pcapHandle, const string& deviceName, const string& filterExpr, std::shared_ptr<DNSStatistic> statObj) {
   if (pcapHandle == nullptr || statObj == nullptr)
     return false;
@@ -92,58 +126,54 @@ bool processPcap(pcap_t *pcapHandle, const string& deviceName, const string& fil
   struct pcap_pkthdr actPcapPacketHeader;
   u_int size_ip;
   struct ip *my_ip;
-  struct tcphdr *my_tcp;
-  struct udphdr *my_udp;
   int n = 0;
+
   DNSResponse dnsResponse;
   while ((packet = pcap_next(pcapHandle, &actPcapPacketHeader)) != NULL) {
     DPRINTF("\nPacket no. %d:\n", ++n);
-    // DPRINTF("\tLength %d, received at %s", actPcapPacketHeader.len, ctime((const time_t *)&actPcapPacketHeader.ts.tv_sec));
 
     // read the Ethernet header
     struct ether_header *eptr = (struct ether_header *)packet;
-    // DPRINTF("\tSource MAC: %s\n", ether_ntoa((const struct ether_addr *)&eptr->ether_shost));
-    // DPRINTF("\tDestination MAC: %s\n\t", ether_ntoa((const struct ether_addr *)&eptr->ether_dhost));
     switch (ntohs(eptr->ether_type))
     {                  // see /usr/include/net/ethernet.h for types
       case ETHERTYPE_IP: // IPv4 packet
-        DPRINTF("Ethernet type is  0x%x, i.e. IP packet \n", ntohs(eptr->ether_type));
         my_ip = (struct ip *)(packet + SIZE_ETHERNET); // skip Ethernet header
         size_ip = my_ip->ip_hl * 4;                    // length of IP header
-
-        // DPRINTF("\tIP: id 0x%x, hlen %d bytes, version %d, total length %d bytes, TTL %d\n", ntohs(my_ip->ip_id), size_ip, my_ip->ip_v, ntohs(my_ip->ip_len), my_ip->ip_ttl);
-        // DPRINTF("IP src = %s, ", inet_ntoa(my_ip->ip_src));
-        // DPRINTF("IP dst = %s\n", inet_ntoa(my_ip->ip_dst));
-
         switch (my_ip->ip_p)
         {
-          case 2: // IGMP protocol
-            DPRINTF("protocol IGMP (%d); ", my_ip->ip_p);
-            break;
-          case 6: // TCP protocol
+          case 6: { // TCP protocol
             DPRINTF("protocol TCP (%d); ", my_ip->ip_p);
-            my_tcp = (struct tcphdr *) (packet+SIZE_ETHERNET+size_ip); // pointer to the TCP header
-            DPRINTF("Src port = %d, dst port = %d, seq = %u",ntohs(my_tcp->source), ntohs(my_tcp->dest), ntohl(my_tcp->seq));
-            break;
-          case 17: // UDP protocol
-            DPRINTF("protocol UDP (%d); ", my_ip->ip_p);
-            my_udp = (struct udphdr *) (packet+SIZE_ETHERNET+size_ip); // pointer to the UDP header
-            DPRINTF("Src port = %d, dst port = %d, length %d\n",ntohs(my_udp->source), ntohs(my_udp->dest), ntohs(my_udp->len));
-            // parse dns packet to response
-            if (dnsResponse.parse(packet + SIZE_ETHERNET + size_ip + sizeof(struct udphdr))) {
-              statObj->addAnswerRecords(dnsResponse.answers);
+            struct tcphdr *tcpHeader = (struct tcphdr *)(packet + SIZE_ETHERNET + size_ip);
+            unsigned int headerSize = getTcpHeaderSize(tcpHeader);
+            // ignoring from statistics when tcp carries DNS payload in multiple segmets
+            if (!isTcpMessageSegmented(tcpHeader)) {
+              // dns message is after 2B specifiing length
+              // it is posible that this packet is last segment of segmented - parsing will fail and data are ignored
+              parseDnsData(
+                (const unsigned char *)tcpHeader + headerSize + 2,
+                &dnsResponse,
+                statObj
+              );
+            } else {
+              DWRITE("segmentated");
             }
-
-            break;
+          } break;
+          case 17: { // UDP protocol
+            DPRINTF("protocol UDP (%d); ", my_ip->ip_p);
+            // struct udphdr *my_udp = (struct udphdr *)(packet + SIZE_ETHERNET + size_ip);
+            // parse dns packet to response
+            parseDnsData(
+              packet + SIZE_ETHERNET + size_ip + sizeof(struct udphdr),
+              &dnsResponse,
+              statObj
+            );
+          } break;
           default:
             DPRINTF("protocol %d\n", my_ip->ip_p);
         }
         break;
       case ETHERTYPE_IPV6: // IPv6
         DPRINTF("Ethernet type is 0x%x, i.e., IPv6 packet\n", ntohs(eptr->ether_type));
-        break;
-      case ETHERTYPE_ARP: // ARP
-        DPRINTF("Ethernet type is 0x%x, i.e., ARP packet\n", ntohs(eptr->ether_type));
         break;
       default:
         DPRINTF("Ethernet type 0x%x, not IPv4\n", ntohs(eptr->ether_type));
