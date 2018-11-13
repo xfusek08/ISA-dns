@@ -15,15 +15,14 @@
 #include <map>
 #include <vector>
 
+#include "DNSResponse.hpp"
 
-enum dnsRecordType {
-  A, AAAA, CNAME, MX, NS, SOA, TXT, SPF, DNSSEC
+enum EStatDNSType {
+  A, AAAA, CNAME, MX, NS, SOA, TXT, SPF
 };
 
 struct DNSStatRecord {
-  std::string domainName;
-  std::string ipAddress;
-  dnsRecordType recType;
+  SDNSAnswerRecord answerRec;
   unsigned int count;
 };
 
@@ -31,10 +30,10 @@ class DNSStatistic {
 public:
   DNSStatistic();
   ~DNSStatistic();
-  void addRecord(DNSStatRecord);
-  void addRecords(const std::vector<DNSStatRecord>&);
+  void addAnswerRecord(const SDNSAnswerRecord&);
+  void addAnswerRecords(const std::vector<SDNSAnswerRecord>&);
+  std::vector<DNSStatRecord> getStatistics();
 private:
-  std::map<std::string, DNSStatRecord> _statistics;
+  std::vector<DNSStatRecord> _statistics;
+  std::string answerRecToString(const SDNSAnswerRecord&);
 };
-
-std::vector<DNSStatRecord> resolveDnsResponsePacket(const unsigned char *);

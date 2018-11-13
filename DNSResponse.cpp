@@ -39,20 +39,20 @@ using namespace std;
 
 
 bool DNSResponse::parse(const unsigned char *packet) {
+
+  answers.clear();
+
   if (packet == nullptr)
     return false;
 
   _beginOfPacket = (unsigned char *)packet;
 
   SDnsHeader mainHeader = parseDnsHeader(_beginOfPacket);
-  if (mainHeader.ansversRRs < 1) // we resolve only answers
-    return false;
+  if (mainHeader.ansversRRs < 1) // nothing to do if there arent any ansvers
+    return true;
 
   if (!resolveAnswes(mainHeader.ansversRRs))
-    return false;
-
-  for (auto &value : answers)
-    DWRITE(value.domainName << " translates to " << value.translatedName);
+    return false; // error
 
   return true;
 }
@@ -69,19 +69,15 @@ bool DNSResponse::resolveAnswes(unsigned short count) {
 
   for (int i = 0; i < count; ++i) {
     SDNSAnswerHeader ansHeader = parseDNSAnswerHeader(actPointerToPacket);
-    SDNSAnswerRecord ansverRec = {
-      ansHeader,
-      readDomainName(ansHeader.domainNameOffset),
-      getAnswerDataString(ansHeader, actPointerToPacket),
-    };
-    answers.push_back(ansverRec);
+    SDNSAnswerRecord answerRec = createAnswerRecord(ansHeader, actPointerToPacket);
+
+    answers.push_back(answerRec);
     actPointerToPacket += ansHeader.dataLen + DNS_ASWER_HEADER_SIZE;
   }
   return true;
 }
 
 SDnsHeader DNSResponse::parseDnsHeader(const unsigned char *firstCharOfHeader) {
-  DWRITE("parseDnsHeader");
   SDnsHeader *header = (SDnsHeader *)firstCharOfHeader;
   SDnsHeader res = {
     ntohs(header->transactionID),
@@ -94,33 +90,33 @@ SDnsHeader DNSResponse::parseDnsHeader(const unsigned char *firstCharOfHeader) {
 
   // debug header printout
   #ifdef DEBUG
-  #ifdef HEADERS
-    for (unsigned int i = 0; i < DNS_HEADER_SIZE; ++i) {
-    fprintf(stderr, "%02x ", firstCharOfHeader[i]);
-    if ((i % 16) == 0 && i != 0)
-      fprintf(stderr, "\n");
-    }
-    DPRINTF("\n"
-      "transactionID: 0x%02x  \n"
-      "flags:         0x%02x  \n"
-      "questions:     %u    \t0x%04x\n"
-      "ansversRRs:    %u    \t0x%04x\n"
-      "authorityRRs:  %u    \t0x%04x\n"
-      "additionalRRs: %u    \t0x%04x\n",
-      res.transactionID,
-      res.flags,
-      res.questions, res.questions,
-      res.ansversRRs, res.ansversRRs,
-      res.authorityRRs, res.authorityRRs,
-      res.additionalRRs, res.additionalRRs
-    );
-  #endif // HEADERS
+    #ifdef HEADERS
+      DWRITE("parseDnsHeader");
+      for (unsigned int i = 0; i < DNS_HEADER_SIZE; ++i) {
+      fprintf(stderr, "%02x ", firstCharOfHeader[i]);
+      if ((i % 16) == 0 && i != 0)
+        fprintf(stderr, "\n");
+      }
+      DPRINTF("\n"
+        "transactionID: 0x%02x  \n"
+        "flags:         0x%02x  \n"
+        "questions:     %u    \t0x%04x\n"
+        "ansversRRs:    %u    \t0x%04x\n"
+        "authorityRRs:  %u    \t0x%04x\n"
+        "additionalRRs: %u    \t0x%04x\n",
+        res.transactionID,
+        res.flags,
+        res.questions, res.questions,
+        res.ansversRRs, res.ansversRRs,
+        res.authorityRRs, res.authorityRRs,
+        res.additionalRRs, res.additionalRRs
+      );
+    #endif // HEADERS
   #endif // DEBUG
   return res;
 }
 
 SDNSAnswerHeader DNSResponse::parseDNSAnswerHeader(const unsigned char *firstCharOfHeader) {
-  DWRITE("parseDNSAnswerHeader");
   SDNSAnswerHeader *header = (SDNSAnswerHeader *)firstCharOfHeader;
   __u16 *datalen = (__u16 *)(firstCharOfHeader + 10); // in struct data are padded after __u32
   SDNSAnswerHeader res = {
@@ -135,25 +131,26 @@ SDNSAnswerHeader DNSResponse::parseDNSAnswerHeader(const unsigned char *firstCha
 
   // debug answer header printout
   #ifdef DEBUG
-  #ifdef HEADERS
-    for (unsigned int i = 0; i < DNS_ASWER_HEADER_SIZE; ++i) {
-    fprintf(stderr, "%02x ", firstCharOfHeader[i]);
-    if ((i % 16) == 0 && i != 0)
-      fprintf(stderr, "\n");
-    }
-    DPRINTF("\n"
-      "domainNameOffset:  %04u\t\t0x%04x\n"
-      "type:              %04u\t\t0x%04x\n"
-      "recClass:          %04u\t\t0x%04x\n"
-      "timeToLive:        %04u\t\t0x%08x\n"
-      "dataLen:           %04u\t\t0x%04x\n",
-      res.domainNameOffset, res.domainNameOffset,
-      res.type, res.type,
-      res.recClass, res.recClass,
-      res.timeToLive, res.timeToLive,
-      res.dataLen, res.dataLen
-    );
-  #endif // HEADERS
+    #ifdef HEADERS
+      DWRITE("parseDNSAnswerHeader");
+      for (unsigned int i = 0; i < DNS_ASWER_HEADER_SIZE; ++i) {
+      fprintf(stderr, "%02x ", firstCharOfHeader[i]);
+      if ((i % 16) == 0 && i != 0)
+        fprintf(stderr, "\n");
+      }
+      DPRINTF("\n"
+        "domainNameOffset:  %04u\t\t0x%04x\n"
+        "type:              %04u\t\t0x%04x\n"
+        "recClass:          %04u\t\t0x%04x\n"
+        "timeToLive:        %04u\t\t0x%08x\n"
+        "dataLen:           %04u\t\t0x%04x\n",
+        res.domainNameOffset, res.domainNameOffset,
+        res.type, res.type,
+        res.recClass, res.recClass,
+        res.timeToLive, res.timeToLive,
+        res.dataLen, res.dataLen
+      );
+    #endif // HEADERS
   #endif // DEBUG
   return res;
 }
@@ -193,41 +190,44 @@ string DNSResponse::readDomainName(const unsigned short offsetOfName) {
   return result;
 }
 
-string DNSResponse::getAnswerDataString(SDNSAnswerHeader answerHeader, unsigned char *actPointerToAnswer) {
-  // DWRITE("getAnswerDataString");
-  string result = "";
+SDNSAnswerRecord DNSResponse::createAnswerRecord(SDNSAnswerHeader answerHeader, const unsigned char *actPointerToAnswer) {
+  SDNSAnswerRecord resultRecord;
+  resultRecord.header = answerHeader;
+  resultRecord.domainName = readDomainName(answerHeader.domainNameOffset);
+  resultRecord.translatedName = "???";
+
   switch (answerHeader.type) {
     case DNS_RECTYPE_A: {
-        DWRITE("type A");
-        struct in_addr *address = (struct in_addr *)(actPointerToAnswer + DNS_ASWER_HEADER_SIZE);
-        result = string(inet_ntoa(*address));
-      } break;
+      resultRecord.typeString = "A";
+      struct in_addr *address = (struct in_addr *)(actPointerToAnswer + DNS_ASWER_HEADER_SIZE);
+      resultRecord.translatedName = string(inet_ntoa(*address));
+    } break;
     case DNS_RECTYPE_NS:
-      DWRITE("type NS");
+      resultRecord.typeString = "NS";
       break;
     case DNS_RECTYPE_AAAA:
-      DWRITE("type AAAA");
+      resultRecord.typeString = "AAAA";
       break;
     case DNS_RECTYPE_CNAME:
-      DWRITE("type CNAME");
+      resultRecord.typeString = "CNAME";
       // to next function we need to calculate offset of data from the begining of the packet
-      result = readDomainName(actPointerToAnswer - _beginOfPacket + DNS_ASWER_HEADER_SIZE);
+      resultRecord.translatedName  = readDomainName(actPointerToAnswer - _beginOfPacket + DNS_ASWER_HEADER_SIZE);
       break;
     case DNS_RECTYPE_MX:
-      DWRITE("type MX");
+      resultRecord.typeString = "MX";
       break;
     case DNS_RECTYPE_SOA:
-      DWRITE("type SOA");
+      resultRecord.typeString = "SOA";
       break;
     case DNS_RECTYPE_TXT:
-      DWRITE("type TXT");
+      resultRecord.typeString = "TXT";
       break;
     case DNS_RECTYPE_SPF:
-      DWRITE("type SPF");
+      resultRecord.typeString = "SPF";
       break;
     default:
-      DWRITE("type unknown: " << (int)answerHeader.type);
+      resultRecord.typeString = STREAM_TO_STR("unknown(" << (int)answerHeader.type << ")");
   }
-  // DWRITE("end");
-  return result;
+
+  return resultRecord;
 }

@@ -11,6 +11,9 @@
 
 #pragma once
 
-#include "utils.hpp"
+#include <memory>
 
-bool processPcapFile(utils::ProgramOptions);
+#include "utils.hpp"
+#include "DNSStatistic.hpp"
+
+bool processPcapFile(utils::ProgramOptions, std::shared_ptr<DNSStatistic>);

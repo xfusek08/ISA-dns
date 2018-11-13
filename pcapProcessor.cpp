@@ -24,7 +24,8 @@
 
 #include "utils.hpp"
 #include "pcapProcessor.hpp"
-#include "dnsStatistics.hpp"
+#include "DNSStatistic.hpp"
+#include "DNSResponse.hpp"
 
 #define SIZE_ETHERNET (14)
 #define DNS_PACKET_FILTER_EXP "(dst port 53) or (src port 53)"
@@ -51,31 +52,41 @@ pcap_t *openPcapFile(const string& filename) {
   return pcapHandle;
 }
 
-bool processPcap(pcap_t *pcapHandle, const string& deviceName, const string& filterExp) {
-  DWRITE("processPcap()");
-
-  char errbuf[PCAP_ERRBUF_SIZE];
-  bpf_u_int32 mask = 0;
-  bpf_u_int32 net = 0;
-  struct bpf_program fp;
-
+bool initDevice(const string& deviceName, bpf_u_int32 *net, bpf_u_int32 *mask) {
   if (!deviceName.empty()) {
-    if (pcap_lookupnet(deviceName.c_str(), &net, &mask, errbuf) == -1) {
+    char errbuf[PCAP_ERRBUF_SIZE];
+    if (pcap_lookupnet(deviceName.c_str(), net, mask, errbuf) == -1) {
       cerr << "Can't get netmask for device \"" << deviceName << "\"" << endl;
       cerr << "Error: " << errbuf << endl;
       return false;
     }
   }
+  return true;
+}
 
-  if (pcap_compile(pcapHandle, &fp, filterExp.c_str(), 0, net) == -1) {
-    cerr << "Couldn't parse filter \"" << filterExp << "\": \"" << pcap_geterr(pcapHandle) << "\"" << endl;
+bool compileAndSetFilter(pcap_t *pcapHandle, bpf_u_int32 *net, const string& filterExpr) {
+  struct bpf_program fp;
+  if (pcap_compile(pcapHandle, &fp, filterExpr.c_str(), 0, *net) == -1) {
+    cerr << "Couldn't parse filter \"" << filterExpr << "\": \"" << pcap_geterr(pcapHandle) << "\"" << endl;
     return false;
   }
-
   if (pcap_setfilter(pcapHandle, &fp) == -1) {
     cerr << "Error: pcap_setfilter() falied." << endl;
     return false;
   }
+  return true;
+}
+
+bool processPcap(pcap_t *pcapHandle, const string& deviceName, const string& filterExpr, std::shared_ptr<DNSStatistic> statObj) {
+  if (pcapHandle == nullptr || statObj == nullptr)
+    return false;
+
+  bpf_u_int32 mask = 0;
+  bpf_u_int32 net = 0;
+  if (!initDevice(deviceName, &net, &mask))
+    return false;
+  if (!compileAndSetFilter(pcapHandle, &net, filterExpr))
+    return false;
 
   const u_char *packet;
   struct pcap_pkthdr actPcapPacketHeader;
@@ -84,6 +95,7 @@ bool processPcap(pcap_t *pcapHandle, const string& deviceName, const string& fil
   struct tcphdr *my_tcp;
   struct udphdr *my_udp;
   int n = 0;
+  DNSResponse dnsResponse;
   while ((packet = pcap_next(pcapHandle, &actPcapPacketHeader)) != NULL) {
     DPRINTF("\nPacket no. %d:\n", ++n);
     // DPRINTF("\tLength %d, received at %s", actPcapPacketHeader.len, ctime((const time_t *)&actPcapPacketHeader.ts.tv_sec));
@@ -95,13 +107,13 @@ bool processPcap(pcap_t *pcapHandle, const string& deviceName, const string& fil
     switch (ntohs(eptr->ether_type))
     {                  // see /usr/include/net/ethernet.h for types
       case ETHERTYPE_IP: // IPv4 packet
-        // DPRINTF("Ethernet type is  0x%x, i.e. IP packet \n", ntohs(eptr->ether_type));
+        DPRINTF("Ethernet type is  0x%x, i.e. IP packet \n", ntohs(eptr->ether_type));
         my_ip = (struct ip *)(packet + SIZE_ETHERNET); // skip Ethernet header
         size_ip = my_ip->ip_hl * 4;                    // length of IP header
 
         // DPRINTF("\tIP: id 0x%x, hlen %d bytes, version %d, total length %d bytes, TTL %d\n", ntohs(my_ip->ip_id), size_ip, my_ip->ip_v, ntohs(my_ip->ip_len), my_ip->ip_ttl);
-        DPRINTF("IP src = %s, ", inet_ntoa(my_ip->ip_src));
-        DPRINTF("IP dst = %s\n", inet_ntoa(my_ip->ip_dst));
+        // DPRINTF("IP src = %s, ", inet_ntoa(my_ip->ip_src));
+        // DPRINTF("IP dst = %s\n", inet_ntoa(my_ip->ip_dst));
 
         switch (my_ip->ip_p)
         {
@@ -117,7 +129,11 @@ bool processPcap(pcap_t *pcapHandle, const string& deviceName, const string& fil
             DPRINTF("protocol UDP (%d); ", my_ip->ip_p);
             my_udp = (struct udphdr *) (packet+SIZE_ETHERNET+size_ip); // pointer to the UDP header
             DPRINTF("Src port = %d, dst port = %d, length %d\n",ntohs(my_udp->source), ntohs(my_udp->dest), ntohs(my_udp->len));
-            resolveDnsResponsePacket(packet+SIZE_ETHERNET+size_ip+sizeof(struct udphdr));
+            // parse dns packet to response
+            if (dnsResponse.parse(packet + SIZE_ETHERNET + size_ip + sizeof(struct udphdr))) {
+              statObj->addAnswerRecords(dnsResponse.answers);
+            }
+
             break;
           default:
             DPRINTF("protocol %d\n", my_ip->ip_p);
@@ -137,10 +153,16 @@ bool processPcap(pcap_t *pcapHandle, const string& deviceName, const string& fil
   return true;
 }
 
-bool processPcapFile(utils::ProgramOptions options) {
-  DWRITE("processPcapFile()");
+bool processPcapFile(utils::ProgramOptions options, std::shared_ptr<DNSStatistic> statObj) {
+  if (statObj == nullptr)
+    return false;
   pcap_t *handle = openPcapFile(options.pcapFileName);
-  bool success = processPcap(handle, "", DNS_PACKET_FILTER_EXP);
+  bool success = processPcap(
+    handle,                 // pcap handle
+    "",                     // device name
+    DNS_PACKET_FILTER_EXP,  // filter expresion
+    statObj                 // statistic gaethering object
+  );
   pcap_close(handle);
   return success;
 }

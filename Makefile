@@ -20,7 +20,8 @@ $(EXECUTABLE): $(OBJS)
 	$(COMPILER) $(CFLAGS) -o $@ $^
 
 test: debug
-	./$(EXECUTABLE) -r /pcapexample/dns.pcap 2> res.txt
+	valgrind ./$(EXECUTABLE) -r /pcapexample/dns.pcap 1> stdout.txt 2> stderr.txt
+	column -t stdout.txt > stdout_formated.txt
 
 clean:
 	-rm *.o

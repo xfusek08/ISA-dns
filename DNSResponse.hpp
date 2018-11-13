@@ -35,6 +35,7 @@ struct SDNSAnswerRecord {
   SDNSAnswerHeader header;
   std::string domainName;
   std::string translatedName;
+  std::string typeString;
 };
 
 class DNSResponse {
@@ -47,16 +48,9 @@ private:
   unsigned char *_beginOfPacket;
 
   bool resolveAnswes(unsigned short count);
-
   SDnsHeader parseDnsHeader(const unsigned char *firstCharOfHeader);
-
   SDNSAnswerHeader parseDNSAnswerHeader(const unsigned char *firstCharOfHeader);
-
   std::string readDomainName(const unsigned short offsetOfName);
-
-  std::string getAnswerDataString(
-    SDNSAnswerHeader answerHeader,
-    unsigned char *actPointerToAnswer
-  );
+  SDNSAnswerRecord createAnswerRecord(SDNSAnswerHeader answerHeader, const unsigned char *actPointerToAnswer);
 
 };

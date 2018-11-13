@@ -13,6 +13,8 @@
 #include <iostream>
 #include <string>
 #include <sstream>
+#include <memory>
+
 #include <unistd.h>
 
 #include "utils.hpp"
@@ -78,9 +80,20 @@ int main(int argc, char * const argv[]) {
     "  Send interval seconds: " << progOptions.sendTimeIntervalSec << endl
   );
 
+  auto statistic = make_shared<DNSStatistic>();
+
   if (progOptions.isPcapFile) {
-    if (!processPcapFile(progOptions))
+    if (!processPcapFile(progOptions, statistic))
       raiseError();
+  }
+
+  // test writeout result
+  for (auto &rec : statistic->getStatistics()) {
+    cout <<
+      rec.answerRec.domainName      << " " <<
+      rec.answerRec.typeString      << " " <<
+      rec.answerRec.translatedName  << " " <<
+      rec.count << endl;
   }
 
   return 0;
