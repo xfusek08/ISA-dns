@@ -94,6 +94,7 @@ SDnsHeader DNSResponse::parseDnsHeader(const unsigned char *firstCharOfHeader) {
 
   // debug header printout
   #ifdef DEBUG
+  #ifdef HEADERS
     for (unsigned int i = 0; i < DNS_HEADER_SIZE; ++i) {
     fprintf(stderr, "%02x ", firstCharOfHeader[i]);
     if ((i % 16) == 0 && i != 0)
@@ -113,7 +114,8 @@ SDnsHeader DNSResponse::parseDnsHeader(const unsigned char *firstCharOfHeader) {
       res.authorityRRs, res.authorityRRs,
       res.additionalRRs, res.additionalRRs
     );
-  #endif
+  #endif // HEADERS
+  #endif // DEBUG
   return res;
 }
 
@@ -133,6 +135,7 @@ SDNSAnswerHeader DNSResponse::parseDNSAnswerHeader(const unsigned char *firstCha
 
   // debug answer header printout
   #ifdef DEBUG
+  #ifdef HEADERS
     for (unsigned int i = 0; i < DNS_ASWER_HEADER_SIZE; ++i) {
     fprintf(stderr, "%02x ", firstCharOfHeader[i]);
     if ((i % 16) == 0 && i != 0)
@@ -150,35 +153,43 @@ SDNSAnswerHeader DNSResponse::parseDNSAnswerHeader(const unsigned char *firstCha
       res.timeToLive, res.timeToLive,
       res.dataLen, res.dataLen
     );
-  #endif
+  #endif // HEADERS
+  #endif // DEBUG
   return res;
 }
 
-string DNSResponse::readDomainName(const unsigned short offsetOfName, const unsigned short maxLenght) {
-  // DWRITE("readDomainName");
+string DNSResponse::readDomainName(const unsigned short offsetOfName) {
   unsigned short actOffset = offsetOfName;
   unsigned char actChar = 0;
   string result = "";
-  // DWRITE(offsetOfName << " " << (int)_beginOfPacket[actOffset] << (int)_beginOfPacket[actOffset + 1] << endl);
-  while ((actChar = _beginOfPacket[actOffset]) != 0 && (unsigned short)(actOffset - offsetOfName) < maxLenght) {
-    if (!result.empty())
-      result += ".";
-
-    if (actChar == 0xc0) {      // domain is pointer
+  DPRINTF("readDomainName on offset: %d | ", (int)offsetOfName);
+  while ((actChar = _beginOfPacket[actOffset]) != 0) {
+    DPRINTF("%02x ", actChar);
+    // if act char has pointer prefix
+    if ((actChar & 0xc0) == 0xc0) {  // mask out everything except first 11 bits as ptr prefix and if it is prt then get value
+      // get whole 16b word begining with 11... and read value then mask out prefix
       __u16 namePtr = htons(*((__u16 *)(&(_beginOfPacket[actOffset])))) & 0x3fff;
+      DPRINTF("[%02x] ", (int)namePtr);
       actOffset = namePtr;
-    } else if (actChar < 64) {  // char signalizing number of octets
+    }
+    // char signalizing number of octets
+    else if (actChar < 64) {
       char label[64];
       ++actOffset;
+      // read corresponding number of octets
       memcpy(label, _beginOfPacket + actOffset, actChar);
       actOffset += actChar;
       label[actChar] = 0;
+      if (!result.empty())
+        result += ".";
       result += string(label);
-    } else {                    // error this situation shold not have occured
+    }
+    // we shouldn't get anything but ptr or number of next label octets
+    else {
       return "error";
     }
   }
-  // DWRITE("end");
+  DWRITE(""); // \n
   return result;
 }
 
@@ -199,10 +210,8 @@ string DNSResponse::getAnswerDataString(SDNSAnswerHeader answerHeader, unsigned 
       break;
     case DNS_RECTYPE_CNAME:
       DWRITE("type CNAME");
-      result = readDomainName(
-        actPointerToAnswer - _beginOfPacket + DNS_ASWER_HEADER_SIZE, // calculate offset from the begining of packet
-        answerHeader.dataLen
-      );
+      // to next function we need to calculate offset of data from the begining of the packet
+      result = readDomainName(actPointerToAnswer - _beginOfPacket + DNS_ASWER_HEADER_SIZE);
       break;
     case DNS_RECTYPE_MX:
       DWRITE("type MX");
@@ -217,7 +226,7 @@ string DNSResponse::getAnswerDataString(SDNSAnswerHeader answerHeader, unsigned 
       DWRITE("type SPF");
       break;
     default:
-      DWRITE("type unknown");
+      DWRITE("type unknown: " << (int)answerHeader.type);
   }
   // DWRITE("end");
   return result;

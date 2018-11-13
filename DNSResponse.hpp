@@ -12,7 +12,6 @@
 
 #include <string>
 #include <vector>
-#include <limits>
 #include <linux/types.h>
 
 struct SDnsHeader {
@@ -53,10 +52,7 @@ private:
 
   SDNSAnswerHeader parseDNSAnswerHeader(const unsigned char *firstCharOfHeader);
 
-  std::string readDomainName(
-    const unsigned short offsetOfName,
-    const unsigned short maxLenght = std::numeric_limits<unsigned short>::max()
-  );
+  std::string readDomainName(const unsigned short offsetOfName);
 
   std::string getAnswerDataString(
     SDNSAnswerHeader answerHeader,

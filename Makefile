@@ -19,5 +19,8 @@ debug: $(EXECUTABLE) clean
 $(EXECUTABLE): $(OBJS)
 	$(COMPILER) $(CFLAGS) -o $@ $^
 
+test: debug
+	./$(EXECUTABLE) -r /pcapexample/dns.pcap 2> res.txt
+
 clean:
 	-rm *.o
