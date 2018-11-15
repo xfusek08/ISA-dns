@@ -2,6 +2,8 @@
 CFLAGS = -std=c++11 -Wall -Wextra -Werror -lpcap
 COMPILER = g++
 EXECUTABLE = dns-export
+PCAPTESTFILE = dns.pcap
+# PCAPTESTFILE = txtresponse.pcap
 SOURCES = $(wildcard *.cpp) $(wildcard */*.cpp)
 OBJS = $(sort $(patsubst %.cpp,%.o,$(SOURCES)))
 
@@ -10,7 +12,7 @@ OBJS = $(sort $(patsubst %.cpp,%.o,$(SOURCES)))
 all: clean $(EXECUTABLE) clean
 
 #setting debug flags
-debug: CFLAGS += -g -DDEBUG -DHEADERS
+debug: CFLAGS += -g -DDEBUG -DHEADERS -DINCLUDE_UNKNOWN
 debug: $(EXECUTABLE) clean
 
 %.o : %.cpp
@@ -20,7 +22,7 @@ $(EXECUTABLE): $(OBJS)
 	$(COMPILER) $(CFLAGS) -o $@ $^
 
 test: debug
-	valgrind ./$(EXECUTABLE) -r /pcapexample/dns.pcap 1> stdout.txt 2> stderr.txt
+	valgrind ./$(EXECUTABLE) -r /pcapexample/$(PCAPTESTFILE) 1> stdout.txt 2> stderr.txt
 	column -t stdout.txt > stdout_formated.txt
 
 clean:

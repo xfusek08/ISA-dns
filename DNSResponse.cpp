@@ -11,6 +11,7 @@
 #include <iostream>
 #include <string>
 #include <sstream>
+#include <iomanip>
 #include <map>
 #include <string.h>
 #include <linux/types.h>
@@ -36,6 +37,10 @@ using namespace std;
 #define DNS_RECTYPE_SOA              6 // marks the start of a zone of authority
 #define DNS_RECTYPE_TXT             16 // text strings
 #define DNS_RECTYPE_SPF             99 // Sender Policy Framework
+#define DNS_RECTYPE_RSIG            46 // resig
+#define DNS_RECTYPE_DNSKEY          48 // dnskey
+#define DNS_RECTYPE_DS              43 // DS
+#define DNS_RECTYPE_NSEC            47 // Next Secure record
 
 bool DNSResponse::parse(const unsigned char *packet) {
 
@@ -84,6 +89,9 @@ bool DNSResponse::resolveAnswes(unsigned short count) {
 
     SDNSAnswerRecord answerRec = createAnswerRecord(ansHeader, actPointerToPacket);
 
+    #ifndef INCLUDE_UNKNOWN
+    if (answerRec.translatedName != "???")
+    #endif
     answers.push_back(answerRec);
     actPointerToPacket += ansHeader.dataLen + DNS_ASWER_HEADER_SIZE;
   }
@@ -168,19 +176,25 @@ SDNSAnswerHeader DNSResponse::parseDNSAnswerHeader(const unsigned char *firstCha
   return res;
 }
 
-string DNSResponse::readDomainName(const unsigned short offsetOfName) {
+string DNSResponse::readDomainName(const unsigned short offsetOfName, unsigned int *length) {
   unsigned short actOffset = offsetOfName;
   unsigned char actChar = 0;
+  bool wasJump = false;
   string result = "";
   DPRINTF("readDomainName on offset: %d | ", (int)offsetOfName);
   while ((actChar = _beginOfPacket[actOffset]) != 0) {
     DPRINTF("%02x ", actChar);
+
     // if act char has pointer prefix
     if ((actChar & 0xc0) == 0xc0) {  // mask out everything except first 11 bits as ptr prefix and if it is prt then get value
       // get whole 16b word begining with 11... and read value then mask out prefix
       __u16 namePtr = htons(*((__u16 *)(&(_beginOfPacket[actOffset])))) & 0x3fff;
       DPRINTF("[%02x] ", (int)namePtr);
       actOffset = namePtr;
+      wasJump = true;
+      if (length != nullptr) {
+        *length += 2;
+      }
     }
     // char signalizing number of octets
     else if (actChar < 64) {
@@ -189,6 +203,9 @@ string DNSResponse::readDomainName(const unsigned short offsetOfName) {
       // read corresponding number of octets
       memcpy(label, _beginOfPacket + actOffset, actChar);
       actOffset += actChar;
+      if (length != nullptr && !wasJump) {
+        *length += actChar + 1;
+      }
       label[actChar] = 0;
       if (!result.empty())
         result += ".";
@@ -199,6 +216,9 @@ string DNSResponse::readDomainName(const unsigned short offsetOfName) {
       return "error";
     }
   }
+  // we reached zero character
+  if (length != nullptr && !wasJump)
+    *length +=  1;
   DWRITE(""); // \n
   return result;
 }
@@ -209,6 +229,8 @@ SDNSAnswerRecord DNSResponse::createAnswerRecord(SDNSAnswerHeader answerHeader, 
   resultRecord.domainName = readDomainName(answerHeader.domainNameOffset);
   resultRecord.translatedName = "???";
 
+  unsigned short offsetToData = actPointerToAnswer - _beginOfPacket + DNS_ASWER_HEADER_SIZE;
+
   switch (answerHeader.type) {
     case DNS_RECTYPE_A: {
       resultRecord.typeString = "A";
@@ -217,6 +239,8 @@ SDNSAnswerRecord DNSResponse::createAnswerRecord(SDNSAnswerHeader answerHeader, 
     } break;
     case DNS_RECTYPE_NS:
       resultRecord.typeString = "NS";
+      // to next function we need to calculate offset of data from the begining of the packet
+      resultRecord.translatedName  = readDomainName(offsetToData);
       break;
     case DNS_RECTYPE_AAAA: {
       resultRecord.typeString = "AAAA";
@@ -226,26 +250,160 @@ SDNSAnswerRecord DNSResponse::createAnswerRecord(SDNSAnswerHeader answerHeader, 
     } break;
     case DNS_RECTYPE_CNAME:
       resultRecord.typeString = "CNAME";
-      // to next function we need to calculate offset of data from the begining of the packet
-      resultRecord.translatedName  = readDomainName(actPointerToAnswer - _beginOfPacket + DNS_ASWER_HEADER_SIZE);
+      resultRecord.translatedName  = readDomainName(offsetToData);
       break;
     case DNS_RECTYPE_MX:
       resultRecord.typeString = "MX";
       // same as in CNAME + 2 bytes of preference
-      resultRecord.translatedName  = readDomainName(actPointerToAnswer - _beginOfPacket + DNS_ASWER_HEADER_SIZE + 2);
+      resultRecord.translatedName  = readDomainName(offsetToData + 2);
       break;
     case DNS_RECTYPE_SOA:
       resultRecord.typeString = "SOA";
+      resultRecord.translatedName = getSoaPayload(_beginOfPacket + offsetToData);
       break;
     case DNS_RECTYPE_TXT:
       resultRecord.typeString = "TXT";
+      resultRecord.translatedName = readTextData(_beginOfPacket + offsetToData, answerHeader.dataLen);
       break;
     case DNS_RECTYPE_SPF:
       resultRecord.typeString = "SPF";
+      resultRecord.translatedName = readTextData(_beginOfPacket + offsetToData, answerHeader.dataLen);
+      break;
+    case DNS_RECTYPE_RSIG:
+      resultRecord.typeString = "RSIG";
+      resultRecord.translatedName = getRsicPayload(_beginOfPacket + offsetToData);
+      break;
+    case DNS_RECTYPE_DNSKEY:
+      resultRecord.typeString = "DNSKEY";
+      resultRecord.translatedName = getDnskeyOrDSPayload(_beginOfPacket + offsetToData, answerHeader.dataLen);
+      break;
+    case DNS_RECTYPE_DS:
+      resultRecord.typeString = "DS";
+      resultRecord.translatedName = getDnskeyOrDSPayload(_beginOfPacket + offsetToData, answerHeader.dataLen);
+      break;
+    case DNS_RECTYPE_NSEC:
+      resultRecord.typeString = "NSEC";
+      resultRecord.translatedName  = readDomainName(offsetToData);
       break;
     default:
       resultRecord.typeString = STREAM_TO_STR("unknown(" << (int)answerHeader.type << ")");
   }
 
   return resultRecord;
+}
+
+string DNSResponse::getDnskeyOrDSPayload(const unsigned char *firstCharOfData, unsigned short len) {
+  unsigned char *actDataChar = (unsigned char *)firstCharOfData;
+  stringstream resStream;
+  resStream << "\"";
+
+  // DNSKEY/DS
+
+  // flags/Key Tag   2B
+  resStream << "0x" << setfill('0') << setw(4) << hex << ntohs(*((unsigned short *)(actDataChar))) << " ";
+  actDataChar += sizeof(__u16);
+
+  // protocol/Algorithm  1B
+  resStream << (int)(*((char *)(actDataChar))) << " ";
+  actDataChar += sizeof(char);
+
+  // algorithm/Digest Type 1B
+  resStream << (int)(*((char *)(actDataChar))) << " ";
+  actDataChar += sizeof(char);
+
+  // Public Key/Digest
+  for (int i = 0; i < actDataChar - firstCharOfData + len; ++i) {
+    resStream << hex << std::setfill('0') << std::setw(2) << static_cast<unsigned>(actDataChar[i]);
+  }
+
+  resStream << "\"";
+  return resStream.str();
+}
+
+
+string DNSResponse::readTextData(const unsigned char *firstCharOfData, unsigned short len) {
+  stringstream resStream;
+  resStream << "\"";
+  for (unsigned short i = 0; i < len; ++i)
+    resStream << firstCharOfData[i];
+  resStream << "\"";
+  return resStream.str();
+}
+
+string DNSResponse::getSoaPayload(const unsigned char *firstCharOfData) {
+  unsigned char *actDataChar = (unsigned char *)firstCharOfData;
+  unsigned int length = 0;
+  stringstream resStream;
+  resStream << "\"";
+
+  // domain of primary name server
+  resStream << readDomainName(actDataChar - _beginOfPacket, &length) << " ";
+  actDataChar += length;
+
+  // domain of responsible authority mail box
+  resStream << readDomainName(actDataChar - _beginOfPacket, &length) << " ";
+  actDataChar += length;
+
+  // serial number 4B
+  resStream << ntohs(*((__u32 *)(actDataChar))) << " ";
+  actDataChar += sizeof(__u32);
+
+  // REFRESH 4B
+  resStream << ntohs(*((__u32 *)(actDataChar))) << " ";
+  actDataChar += sizeof(__u32);
+
+  // RETRY 4B
+  resStream << ntohs(*((__u32 *)(actDataChar))) << " ";
+  actDataChar += sizeof(__u32);
+
+  // EXPIRE 4B
+  resStream << ntohs(*((__u32 *)(actDataChar))) << " ";
+  actDataChar += sizeof(__u32);
+
+  // MINIMUM 4B
+  resStream << ntohs(*((__u32 *)(actDataChar)));
+  actDataChar += sizeof(__u32);
+
+  resStream << "\"";
+  return resStream.str();
+}
+
+string DNSResponse::getRsicPayload(const unsigned char *firstCharOfData) {
+  unsigned char *actDataChar = (unsigned char *)firstCharOfData;
+  stringstream resStream;
+  resStream << "\"";
+
+  // type covered 2B
+  resStream << ntohs(*((__u16 *)(actDataChar))) << " ";
+  actDataChar += sizeof(__u16);
+
+  // alghorithm 1B
+  resStream << (int)(*((char *)(actDataChar))) << " ";
+  actDataChar += sizeof(char);
+
+  // labels 1B
+  resStream << (int)(*((char *)(actDataChar))) << " ";
+  actDataChar += sizeof(char);
+
+  // orig TTL 4B
+  resStream << ntohs(*((__u32 *)(actDataChar))) << " ";
+  actDataChar += sizeof(__u32);
+
+  // Signature Expiration 4B
+  resStream << ntohs(*((__u32 *)(actDataChar))) << " ";
+  actDataChar += sizeof(__u32);
+
+  // Signature Inception 4B
+  resStream << ntohs(*((__u32 *)(actDataChar))) << " ";
+  actDataChar += sizeof(__u32);
+
+  // keytag 2B
+  resStream << ntohs(*((__u16 *)(actDataChar))) << " ";
+  actDataChar += sizeof(__u16);
+
+  // Signer's Name domain ...
+  resStream << readDomainName(actDataChar - _beginOfPacket);
+
+  resStream << "\"";
+  return resStream.str();
 }

@@ -50,7 +50,10 @@ private:
   bool resolveAnswes(unsigned short count);
   SDnsHeader parseDnsHeader(const unsigned char *firstCharOfHeader);
   SDNSAnswerHeader parseDNSAnswerHeader(const unsigned char *firstCharOfHeader);
-  std::string readDomainName(const unsigned short offsetOfName);
+  std::string readDomainName(const unsigned short offsetOfName, unsigned int *lenght = nullptr);
   SDNSAnswerRecord createAnswerRecord(SDNSAnswerHeader answerHeader, const unsigned char *actPointerToAnswer);
-
+  std::string getRsicPayload(const unsigned char *firstCharOfData);
+  std::string getSoaPayload(const unsigned char *firstCharOfData);
+  std::string getDnskeyOrDSPayload(const unsigned char *firstCharOfData, unsigned short len);
+  std::string readTextData(const unsigned char *firstCharOfData, unsigned short len);
 };
