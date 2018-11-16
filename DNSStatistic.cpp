@@ -46,10 +46,6 @@ void DNSStatistic::addAnswerRecords(const std::vector<SDnsAnswerRecord>& records
     addAnswerRecord(rec);
 }
 
-std::vector<SDnsStatRecord> DNSStatistic::getStatistics() {
-  return _statistics;
-}
-
 bool DNSStatistic::initializeSyslogServer(const std::string&) { return true; }
 
 void DNSStatistic::sendToSyslog() {

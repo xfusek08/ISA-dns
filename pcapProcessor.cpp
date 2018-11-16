@@ -21,7 +21,7 @@
 #include <arpa/inet.h>
 #include <netinet/if_ether.h>
 #include <netinet/ether.h>
-#include <sys/time.h>
+#include <unistd.h>
 
 #include "utils.hpp"
 #include "pcapProcessor.hpp"
@@ -33,10 +33,25 @@
 using namespace std;
 using namespace utils;
 
+/**
+ * hidden global variable for pcap handle to make sure that waiting for
+ * next packet will be breakable form signal handler
+ */
+static pcap_t *glb_pcapHandle = nullptr;
+
+/* signal handleing specifiing flag which is use to print out statistins */
+static volatile sig_atomic_t glb_pcap_writeOutFlag = 0;
+static volatile sig_atomic_t glb_pcap_sendToSyslogFlag = 0;
+
 /* signal handleing specifiing flag which is use to print out statistins */
 void pcap_writeoutSignal(int signum) {
-  (void)signum;
-  glb_pcap_writeOutFlag = 1;
+  if (signum == SIGUSR1)
+    glb_pcap_writeOutFlag = 1;
+  else if (signum == SIGALRM)
+    glb_pcap_sendToSyslogFlag = 1;
+  else
+    return;
+  pcap_breakloop(glb_pcapHandle);
 }
 
 /**
@@ -78,6 +93,9 @@ pcap_t *openLivePcap(const string& interface) {
   if (interface.empty()) {
     cerr << "Pcap file name is empty." << endl;
     return nullptr;
+  } else if (interface == "any") {
+    cerr << "Cannot use world \"any\" as an interface, feature is not supported." << endl;
+    return nullptr;
   }
 
   // try open the pcap file
@@ -85,8 +103,8 @@ pcap_t *openLivePcap(const string& interface) {
   pcap_t *pcapHandle = pcap_open_live(
     interface.c_str(),  // device name
     1600,               // snapshot length
-    0,                  // promiscuous mode
-    500,                // buffer timeout
+    1,                  // promiscuous mode
+    1000,               // buffer timeout
     errbuf              // error buffer
   );
   if (pcapHandle == nullptr) {
@@ -182,9 +200,6 @@ void parseDnsData(const unsigned char *firstCharOfData, DNSResponse *respObj, st
  * @param statObj Instance of DNSStatistics object to be filled with new data from actual packet
  */
 void processOnePacket(const unsigned char *packet, std::shared_ptr<DNSStatistic> statObj) {
-  for (int i = 0; i < 20; ++i) {
-    fprintf(stderr, "%02x ", packet[i]);
-  }
   struct ether_header *eptr = (struct ether_header *)packet;
   DNSResponse dnsResponse;
 
@@ -233,19 +248,6 @@ void processOnePacket(const unsigned char *packet, std::shared_ptr<DNSStatistic>
   }
 }
 
-void pcaphandler(u_char *args, const struct pcap_pkthdr *header, const u_char *packet) {
-  (void)args;
-  (void)header;
-  for (int i = 0; i < 60; ++i) {
-    fprintf(stderr, "%02x ", packet[i]);
-    if (((i+1) % 8) == 0)
-      fprintf(stderr, " ");
-    if (((i+1) % (8*2)) == 0)
-      fprintf(stderr, "\n");
-  }
-  fprintf(stderr, "\n\n");
-}
-
 /* Fill statistics with data from one pcap file (For more see pcapProcessor.hpp) */
 bool processPcapFile(utils::ProgramOptions options, std::shared_ptr<DNSStatistic> statObj) {
   if (statObj == nullptr)
@@ -281,42 +283,44 @@ bool beginLiveDnsAnalysis(utils::ProgramOptions options, std::shared_ptr<DNSStat
 
   DWRITE("Start capturing on " << options.interface << ".");
 
-  pcap_t *handle = openLivePcap(options.interface);
-  if (handle == nullptr)
+  glb_pcapHandle = openLivePcap(options.interface);
+  if (glb_pcapHandle == nullptr)
     return false;
 
-  if (!initDeviceAndSetFilter(handle, options.interface, DNS_PACKET_FILTER_EXP))
+  if (!initDeviceAndSetFilter(glb_pcapHandle, options.interface, DNS_PACKET_FILTER_EXP))
    return false;
+
+  // set signal handler
+  signal(SIGUSR1, pcap_writeoutSignal); // for writing on stdout
+  signal(SIGALRM, pcap_writeoutSignal);  // for sending to syslog server
 
   const u_char *packet;
   struct pcap_pkthdr actPcapPacketHeader;
-  struct timeval nextSendTime;
-  gettimeofday(&nextSendTime, NULL);
-  nextSendTime.tv_sec += options.sendTimeIntervalSec;
-  struct timeval actTime;
 
   #ifdef DEBUG
   int n = 0;
   #endif
-  pcap_loop(handle, -1, pcaphandler, NULL);
-  DWRITE("end of loop");
+
+  alarm(options.sendTimeIntervalSec);
+
   while (1) {
-    while ((packet = pcap_next(handle, &actPcapPacketHeader)) != NULL) {
+    while ((packet = pcap_next(glb_pcapHandle, &actPcapPacketHeader)) != NULL) {
       DPRINTF("\nPacket no. %d:\n", ++n);
       processOnePacket(packet, statObj);
     }
+
     if (glb_pcap_writeOutFlag == 1) {
       statObj->printStatistics();
       glb_pcap_writeOutFlag = 0;
     }
 
-    gettimeofday(&actTime, NULL);
-    if (actTime.tv_sec >= nextSendTime.tv_sec) {
+    if (glb_pcap_sendToSyslogFlag == 1) {
       statObj->sendToSyslog();
-      nextSendTime.tv_sec = actTime.tv_sec + options.sendTimeIntervalSec;
+      alarm(options.sendTimeIntervalSec);
+      glb_pcap_sendToSyslogFlag = 0;
     }
   }
 
-  pcap_close(handle);
+  pcap_close(glb_pcapHandle);
   return true;
 }

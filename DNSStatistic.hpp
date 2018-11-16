@@ -32,7 +32,6 @@ public:
   ~DNSStatistic();
   void addAnswerRecord(const SDnsAnswerRecord&);
   void addAnswerRecords(const std::vector<SDnsAnswerRecord>&);
-  std::vector<SDnsStatRecord> getStatistics();
   bool initializeSyslogServer(const std::string&);
   void sendToSyslog();
   void printStatistics();

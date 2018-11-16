@@ -9,11 +9,7 @@ OBJS = $(sort $(patsubst %.cpp,%.o,$(SOURCES)))
 
 .PHONY: clean
 
-all: clean $(EXECUTABLE) clean
-
-#setting debug flags
-debug: CFLAGS += -g -DDEBUG -DHEADERS -DINCLUDE_UNKNOWN
-debug: $(EXECUTABLE) clean
+all: compile
 
 %.o : %.cpp
 	$(COMPILER) $(CFLAGS) -c $< -o $@
@@ -21,12 +17,25 @@ debug: $(EXECUTABLE) clean
 $(EXECUTABLE): $(OBJS)
 	$(COMPILER) $(CFLAGS) -o $@ $^
 
+compile: clean $(EXECUTABLE)
+	make clean --silent
+
+#setting debug flags
+debug: CFLAGS += -g -DDEBUG -DHEADERS -DINCLUDE_UNKNOWN
+debug: compile
+
 testfile: debug
 	valgrind ./$(EXECUTABLE) -r /pcapexample/$(PCAPTESTFILE) 1> stdout.txt 2> stderr.txt
 	column -t stdout.txt > stdout_formated.txt
 
 testlive: debug
-	./$(EXECUTABLE) -i any -t 10
+	./$(EXECUTABLE) -i enp0s3 -t 3
+	make clean
+
+testliverel: compile
+	./$(EXECUTABLE) -i enp0s3 -t 3
 
 clean:
+ifneq (,$(wildcard *.o))
 	-rm *.o
+endif

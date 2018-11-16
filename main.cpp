@@ -104,9 +104,6 @@ int main(int argc, char * const argv[]) {
       statistic->printStatistics();
   }
   else if (progOptions.isInterface) {
-    // set signal handler on golbal flag from pcapProcessor module.
-    signal(SIGUSR1, pcap_writeoutSignal);
-
     // start capturing
     if (!beginLiveDnsAnalysis(progOptions, statistic))
       raiseError();

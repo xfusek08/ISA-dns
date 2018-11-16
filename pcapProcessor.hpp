@@ -20,10 +20,6 @@
 /* Here is specified pcap filter which will be used in this module for capturing */
 #define DNS_PACKET_FILTER_EXP "(dst port 53) or (src port 53)"
 
-/* signal handleing specifiing flag which is use to print out statistins */
-static volatile sig_atomic_t glb_pcap_writeOutFlag = 0;
-void pcap_writeoutSignal(int signum);
-
 /**
  * @brief Fill statistics with data from one pcap file
  *
