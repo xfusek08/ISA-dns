@@ -8,8 +8,6 @@
  */
 /******************************************************************************/
 
-#define DEFAULT_STATISTIC_TIME  60
-
 #include <iostream>
 #include <string>
 #include <sstream>
@@ -22,6 +20,9 @@
 
 using namespace std;
 using namespace utils;
+
+/* default time interval specified in task specification */
+#define DEFAULT_STATISTIC_TIME  60
 
 /* Display program help */
 void printHelp()
@@ -70,6 +71,8 @@ ProgramOptions parseOptions(int argc, char * const argv[]) {
   return resultOptions;
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 int main(int argc, char * const argv[]) {
   ProgramOptions progOptions = parseOptions(argc, argv);
   DWRITE(endl <<
@@ -80,21 +83,33 @@ int main(int argc, char * const argv[]) {
     "  Send interval seconds: " << progOptions.sendTimeIntervalSec << endl
   );
 
-  auto statistic = make_shared<DNSStatistic>();
+  // file and interface are mutual exclusive
+  if (progOptions.isPcapFile && progOptions.isInterface)
+    raiseError("Parameters -r and -i are mutual exclusive.", true);
+
+  shared_ptr<DNSStatistic> statistic = make_shared<DNSStatistic>();
+
+  if (progOptions.isSyslogserveAddress) {
+    if (!statistic->initializeSyslogServer(progOptions.syslogServerAddress))
+      raiseError();
+  }
 
   if (progOptions.isPcapFile) {
     if (!processPcapFile(progOptions, statistic))
       raiseError();
-  }
 
-  // test writeout result
-  for (auto &rec : statistic->getStatistics()) {
-    cout <<
-      rec.answerRec.domainName      << " " <<
-      rec.answerRec.typeString      << " " <<
-      rec.answerRec.translatedName  << " " <<
-      rec.count << endl;
+    if (progOptions.isSyslogserveAddress)
+      statistic->sendToSyslog();
+    else
+      statistic->printStatistics();
   }
+  else if (progOptions.isInterface) {
+    // set signal handler on golbal flag from pcapProcessor module.
+    signal(SIGUSR1, pcap_writeoutSignal);
 
+    // start capturing
+    if (!beginLiveDnsAnalysis(progOptions, statistic))
+      raiseError();
+  }
   return 0;
 }

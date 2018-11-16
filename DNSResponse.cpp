@@ -28,20 +28,6 @@ using namespace std;
 #define DNS_HEADER_SIZE (12)
 #define DNS_ASWER_HEADER_SIZE (12)
 
-// DNS Types
-#define DNS_RECTYPE_A                1 // a host address
-#define DNS_RECTYPE_NS               2 // an authoritative name server
-#define DNS_RECTYPE_AAAA            28 // IPv6 result
-#define DNS_RECTYPE_CNAME            5 // the canonical name for an alias
-#define DNS_RECTYPE_MX              15 // mail exchange
-#define DNS_RECTYPE_SOA              6 // marks the start of a zone of authority
-#define DNS_RECTYPE_TXT             16 // text strings
-#define DNS_RECTYPE_SPF             99 // Sender Policy Framework
-#define DNS_RECTYPE_RSIG            46 // resig
-#define DNS_RECTYPE_DNSKEY          48 // dnskey
-#define DNS_RECTYPE_DS              43 // DS
-#define DNS_RECTYPE_NSEC            47 // Next Secure record
-
 bool DNSResponse::parse(const unsigned char *packet) {
 
   answers.clear();
@@ -82,12 +68,12 @@ bool DNSResponse::resolveAnswes(unsigned short count) {
   actPointerToPacket += SIZE_OF_QUESTION_FOOTER + 1;
 
   for (int i = 0; i < count; ++i) {
-    SDNSAnswerHeader ansHeader = parseDNSAnswerHeader(actPointerToPacket);
+    SDnsAnswerHeader ansHeader = parseDNSAnswerHeader(actPointerToPacket);
     // check if header is reasonable
     if (ansHeader.recClass != 1 || ansHeader.dataLen > 1400)
       return false;
 
-    SDNSAnswerRecord answerRec = createAnswerRecord(ansHeader, actPointerToPacket);
+    SDnsAnswerRecord answerRec = createAnswerRecord(ansHeader, actPointerToPacket);
 
     #ifndef INCLUDE_UNKNOWN
     if (answerRec.translatedName != "???")
@@ -137,10 +123,10 @@ SDnsHeader DNSResponse::parseDnsHeader(const unsigned char *firstCharOfHeader) {
   return res;
 }
 
-SDNSAnswerHeader DNSResponse::parseDNSAnswerHeader(const unsigned char *firstCharOfHeader) {
-  SDNSAnswerHeader *header = (SDNSAnswerHeader *)firstCharOfHeader;
+SDnsAnswerHeader DNSResponse::parseDNSAnswerHeader(const unsigned char *firstCharOfHeader) {
+  SDnsAnswerHeader *header = (SDnsAnswerHeader *)firstCharOfHeader;
   __u16 *datalen = (__u16 *)(firstCharOfHeader + 10); // in struct data are padded after __u32
-  SDNSAnswerHeader res = {
+  SDnsAnswerHeader res = {
     ntohs(header->domainNameOffset),
     ntohs(header->type),
     ntohs(header->recClass),
@@ -223,8 +209,8 @@ string DNSResponse::readDomainName(const unsigned short offsetOfName, unsigned i
   return result;
 }
 
-SDNSAnswerRecord DNSResponse::createAnswerRecord(SDNSAnswerHeader answerHeader, const unsigned char *actPointerToAnswer) {
-  SDNSAnswerRecord resultRecord;
+SDnsAnswerRecord DNSResponse::createAnswerRecord(SDnsAnswerHeader answerHeader, const unsigned char *actPointerToAnswer) {
+  SDnsAnswerRecord resultRecord;
   resultRecord.header = answerHeader;
   resultRecord.domainName = readDomainName(answerHeader.domainNameOffset);
   resultRecord.translatedName = "???";
@@ -319,7 +305,6 @@ string DNSResponse::getDnskeyOrDSPayload(const unsigned char *firstCharOfData, u
   resStream << "\"";
   return resStream.str();
 }
-
 
 string DNSResponse::readTextData(const unsigned char *firstCharOfData, unsigned short len) {
   stringstream resStream;

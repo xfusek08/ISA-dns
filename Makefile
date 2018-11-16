@@ -21,9 +21,12 @@ debug: $(EXECUTABLE) clean
 $(EXECUTABLE): $(OBJS)
 	$(COMPILER) $(CFLAGS) -o $@ $^
 
-test: debug
+testfile: debug
 	valgrind ./$(EXECUTABLE) -r /pcapexample/$(PCAPTESTFILE) 1> stdout.txt 2> stderr.txt
 	column -t stdout.txt > stdout_formated.txt
+
+testlive: debug
+	./$(EXECUTABLE) -i any -t 10
 
 clean:
 	-rm *.o
