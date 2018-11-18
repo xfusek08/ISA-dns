@@ -3,6 +3,7 @@
  * \project ISA - Export DNS information with help of Syslog protocol
  * \file    utils.cpp
  * \brief   Liblary providing supportive function for project
+ *          implementation of utils.hpp
  * \author  Petr Fusek (xfusek08)
  * \date    19.11.1018
  */
@@ -52,6 +53,11 @@ void utils::raisePerror(const char *message, const bool checkHelp) {
   utils::raiseError(nullptr, checkHelp);
 }
 
+/**
+ * @brief Translates sockaddr to readable string representation.
+ *
+ * (see utils.hpp for more info.)
+ */
 string utils::addrinfo_getAddrString(const struct sockaddr *addrinfo) {
   string res = "";
   unsigned int maxLen = INET6_ADDRSTRLEN + 1;
@@ -79,6 +85,7 @@ string utils::addrinfo_getAddrString(const struct sockaddr *addrinfo) {
 /**
  * @brief Get the Act Time Stamp String object
  * Code ispired by example at https://stackoverflow.com/questions/3673226/how-to-print-time-in-format-2009-08-10-181754-811
+ * (see utils.hpp for more info.)
  */
 string utils::getActTimeStampString() {
   int millisec;

@@ -2,7 +2,8 @@
 /**
  * \project ISA - Export DNS information with help of Syslog protocol
  * \file    DNSStatistics.cpp
- * \brief
+ * \brief   (Class and structures for DNS statistic gathering.)
+ *          Implementation of DNSStatistics.hpp.
  * \author  Petr Fusek (xfusek08)
  * \date    19.11.2018
  */
@@ -21,25 +22,35 @@
 #include "utils.hpp"
 #include "DNSStatistic.hpp"
 
-#define SYSLOG_PORT_NUMBER_TXT "514"
-#define MAX_SNED_ERRORS_IN_ROW 5
+#define SYSLOG_PORT_NUMBER_TXT "514"  // port of syslog server
+#define MAX_SEND_ERRORS_IN_ROW 5      // maximal number of errors that are allowed to occur while
+                                      // sending list of statistics to syslog server.
 
 using namespace std;
 
+/** Constructor */
 DNSStatistic::DNSStatistic() {
   _isSyslogInitialized = false;
   _syslogSocket = 0;
   _localAddrString = "";
 }
 
-DNSStatistic::~DNSStatistic() {}
+/** Destructor */
+DNSStatistic::~DNSStatistic() {
+  deinitSyslogServer();
+}
 
+/**
+ * @brief Adds given record to statistics.
+ *
+ * (See DNSStatistic.hpp for more info.)
+ */
 void DNSStatistic::addAnswerRecord(const SDnsAnswerRecord& record) {
   bool isNew = true;
   for (unsigned int i = 0; i < _statistics.size(); ++i) {
     SDnsStatRecord *actRec = &(_statistics[i]);
     if (actRec->answerRec.domainName     == record.domainName &&
-        actRec->answerRec.translatedName == record.translatedName &&
+        actRec->answerRec.answerData == record.answerData &&
         actRec->answerRec.typeString     == record.typeString) {
       actRec->count++;
       isNew = false;
@@ -51,14 +62,20 @@ void DNSStatistic::addAnswerRecord(const SDnsAnswerRecord& record) {
     _statistics.push_back({ record, 1 });
 }
 
+/**
+ * @brief Adds vector of SDnsAnswerRecords to statistics via addAnswerRecord method.
+ * (See DNSStatistic.hpp for more info.)
+ */
 void DNSStatistic::addAnswerRecords(const std::vector<SDnsAnswerRecord>& records) {
   for (auto &rec : records)
     addAnswerRecord(rec);
 }
 
 /**
- * TODO: odkaz na hpp
+ * @brief Function initialize connection to syslog server.
+ *
  * Code ispired by example at http://man7.org/linux/man-pages/man3/getaddrinfo.3.html
+ * (See DNSStatistic.hpp for more info.)
  */
 bool DNSStatistic::initSyslogServer(const std::string& servername) {
   if (_isSyslogInitialized)
@@ -139,16 +156,27 @@ bool DNSStatistic::initSyslogServer(const std::string& servername) {
   return true;
 }
 
+/**
+ * @brief Disconnect from syslog server.
+ * (See DNSStatistic.hpp for more info.)
+ */
 void DNSStatistic::deinitSyslogServer() {
-  close(_syslogSocket);
-  _syslogSocket = 0;
-  _isSyslogInitialized = false;
+  DWRITE("deinitSyslogServer()");
+  if (_isSyslogInitialized) {
+    close(_syslogSocket);
+    _syslogSocket = 0;
+    _isSyslogInitialized = false;
+  }
 }
 
-void DNSStatistic::sendToSyslog() {
+/**
+ * @brief Send all statistics to syslog server.
+ * (See DNSStatistic.hpp for more info.)
+ */
+bool DNSStatistic::sendToSyslog() {
   DWRITE("sendToSyslog ... (" << _isSyslogInitialized << ")");
   if (!_isSyslogInitialized)
-    return;
+    return false;
 
   string message;
   unsigned int errorCnt = 0;
@@ -177,31 +205,38 @@ void DNSStatistic::sendToSyslog() {
       ++sendCnt;
     }
 
-    if (errorCnt >= MAX_SNED_ERRORS_IN_ROW) {
+    if (errorCnt >= MAX_SEND_ERRORS_IN_ROW) {
       cerr << "Error: Too much unsuccessful send tries in the row when reporting statistics to syslog server:" << endl;
       cerr << "\t" <<  _statistics.size() - sendCnt << " out of " << _statistics.size() << " failed to send." << endl;
-      break;
+      return false;
     }
   }
   if (sendCnt != _statistics.size()) {
     cerr << "Warning: Errors ocurred while sending statistics to syslog server:\n";
     cerr << "\t" <<  _statistics.size() - sendCnt << " out of " << _statistics.size() << " failed to send." << endl;
   }
+  return true;
 }
 
-string DNSStatistic::statToString(const SDnsStatRecord &rec) {
-  stringstream resStream;
-  resStream <<
-    rec.answerRec.domainName      << " " <<
-    rec.answerRec.typeString      << " " <<
-    rec.answerRec.translatedName  << " " <<
-    rec.count;
-  return resStream.str();
-}
-
+/**
+ * @brief Prints statistinc in specific format to stdout, each line for one statistic record.
+ */
 void DNSStatistic::printStatistics() {
     DWRITE("printStatistics: " << _statistics.size());
     for (const auto &rec : _statistics) {
       cout << statToString(rec) << endl;
   }
+}
+
+/**
+ * @brief Takes record and get formated string representing one statistic record.
+ */
+string DNSStatistic::statToString(const SDnsStatRecord &rec) {
+  stringstream resStream;
+  resStream <<
+    rec.answerRec.domainName      << " " <<
+    rec.answerRec.typeString      << " " <<
+    rec.answerRec.answerData  << " " <<
+    rec.count;
+  return resStream.str();
 }

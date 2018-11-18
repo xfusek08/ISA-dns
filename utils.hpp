@@ -1,7 +1,7 @@
 /******************************************************************************/
 /**
  * \project ISA - Export DNS information with help of Syslog protocol
- * \file    pcapFileProcessor.hpp
+ * \file    utils.hpp
  * \brief   Liblary providing supportive function for project
  * \author  Petr Fusek (xfusek08)
  * \date    19.11.1018
@@ -48,19 +48,22 @@ namespace utils {
   void raisePerror(const char *message = nullptr, const bool checkHelp = false);
 
   /**
-   * @brief Function takes struct addrinfo and translates information about address int readable string
+   * @brief Translates sockaddr to readable string representation.
+   *
+   * Function takes struct addrinfo and translates information about address int readable string
    * regaldless if its IPv4 or IPv6.
    *
    * @param addrinfo  pointer to struct addrinfo storing arddes to be translated
-   * @return string   translated address string, empty string on error or if address does not exixts.
+   * @return string   translated address string
+   *                  empty string on error or if address does not exits.
    */
   std::string addrinfo_getAddrString(const struct sockaddr *addrinfo);
 
   /**
    * @brief Get the Act Time Stamp String object
    *
-   * @return retruns act time in string formatet for syslog in format
-   * yyyy-MM-dd'T'HH:mm:ss.SSS'Z' by RFC3339
+   * @return act time in string formatet for syslog in format
+   *         yyyy-MM-dd'T'HH:mm:ss.SSS'Z' by RFC3339
    */
   std::string getActTimeStampString();
 }

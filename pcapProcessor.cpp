@@ -1,10 +1,12 @@
 /******************************************************************************/
 /**
- * \project ISA - Export DNS information with help of Syslog protocol
- * \file    pcapProcessor.cpp
- * \brief
- * \author  Petr Fusek (xfusek08)
- * \date    19.11.1018
+ * @project ISA - Export DNS information with help of Syslog protocol
+ * @file    pcapProcessor.cpp
+ * @brief   Module providing functions for DNS analisis from *.pcap files
+ *          or from live network interface traffic monitorinf.
+ *          Implementation of pcapProcessor.hpp
+ * @author  Petr Fusek (xfusek08)
+ * @date    19.11.1018
  */
 /******************************************************************************/
 
@@ -194,7 +196,7 @@ void parseDnsData(const unsigned char *firstCharOfData, DNSResponse *respObj, st
 
 /**
  * @brief Function decodes packet captured by pcap and if it is and dns response of right
- * type (see "Suported DNS Types" in DNSResponse.hpp) new record are added to the statistics object.
+ * type (see "Suported DNS Types" macors in DNSResponse.hpp) new record are added to the statistics object.
  *
  * @param packet  Pointer to first char of packet to be processed.
  * @param statObj Instance of DNSStatistics object to be filled with new data from actual packet
@@ -254,7 +256,11 @@ void processOnePacket(const unsigned char *packet, std::shared_ptr<DNSStatistic>
   }
 }
 
-/* Fill statistics with data from one pcap file (For more see pcapProcessor.hpp) */
+/**
+ * @brief Fill statistics with data from one pcap file
+ *
+ * (See pcapProcessor.hpp for more info
+ */
 bool processPcapFile(utils::ProgramOptions options, std::shared_ptr<DNSStatistic> statObj) {
   if (statObj == nullptr)
     return false;
@@ -282,7 +288,11 @@ bool processPcapFile(utils::ProgramOptions options, std::shared_ptr<DNSStatistic
   return true;
 }
 
-/* Begins live packet capturing (For more see pcapProcessor.hpp) */
+/**
+ * @brief Begins live packet capturing
+ *
+ * (See pcapProcessor.hpp for more info
+ */
 bool beginLiveDnsAnalysis(utils::ProgramOptions options, std::shared_ptr<DNSStatistic> statObj) {
   if (statObj == nullptr)
     return false;
@@ -321,7 +331,10 @@ bool beginLiveDnsAnalysis(utils::ProgramOptions options, std::shared_ptr<DNSStat
     }
 
     if (glb_pcap_sendToSyslogFlag == 1) {
-      statObj->sendToSyslog();
+      if (!statObj->sendToSyslog()) {
+        pcap_close(glb_pcapHandle);
+        return false;
+      }
       alarm(options.sendTimeIntervalSec);
       glb_pcap_sendToSyslogFlag = 0;
     }

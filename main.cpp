@@ -98,9 +98,11 @@ int main(int argc, char * const argv[]) {
     if (!processPcapFile(progOptions, statistic))
       raiseError();
 
-    if (progOptions.isSyslogserveAddress)
-      statistic->sendToSyslog();
-    else
+    if (progOptions.isSyslogserveAddress) {
+      if (!statistic->sendToSyslog()) {
+        raiseError();
+      }
+    } else
       statistic->printStatistics();
   }
   else if (progOptions.isInterface) {

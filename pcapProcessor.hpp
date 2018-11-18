@@ -1,11 +1,12 @@
 
 /******************************************************************************/
 /**
- * \project ISA - Export DNS information with help of Syslog protocol
- * \file    pcapProcessor.hpp
- * \brief
- * \author  Petr Fusek (xfusek08)
- * \date    19.11.1018
+ * @project ISA - Export DNS information with help of Syslog protocol
+ * @file    pcapProcessor.hpp
+ * @brief   Module providing functions for DNS analisis from *.pcap files
+ *          or from live network interface traffic monitorinf.
+ * @author  Petr Fusek (xfusek08)
+ * @date    19.11.1018
  */
 /******************************************************************************/
 
