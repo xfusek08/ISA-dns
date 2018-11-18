@@ -90,7 +90,7 @@ int main(int argc, char * const argv[]) {
   shared_ptr<DNSStatistic> statistic = make_shared<DNSStatistic>();
 
   if (progOptions.isSyslogserveAddress) {
-    if (!statistic->initializeSyslogServer(progOptions.syslogServerAddress))
+    if (!statistic->initSyslogServer(progOptions.syslogServerAddress))
       raiseError();
   }
 

@@ -46,4 +46,21 @@ namespace utils {
    */
   void raisePerror(const std::string& message, const bool checkHelp = false);
   void raisePerror(const char *message = nullptr, const bool checkHelp = false);
+
+  /**
+   * @brief Function takes struct addrinfo and translates information about address int readable string
+   * regaldless if its IPv4 or IPv6.
+   *
+   * @param addrinfo  pointer to struct addrinfo storing arddes to be translated
+   * @return string   translated address string, empty string on error or if address does not exixts.
+   */
+  std::string addrinfo_getAddrString(const struct sockaddr *addrinfo);
+
+  /**
+   * @brief Get the Act Time Stamp String object
+   *
+   * @return retruns act time in string formatet for syslog in format
+   * yyyy-MM-dd'T'HH:mm:ss.SSS'Z' by RFC3339
+   */
+  std::string getActTimeStampString();
 }

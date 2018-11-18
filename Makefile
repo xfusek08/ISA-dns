@@ -25,15 +25,14 @@ debug: CFLAGS += -g -DDEBUG -DHEADERS -DINCLUDE_UNKNOWN
 debug: compile
 
 testfile: debug
-	valgrind ./$(EXECUTABLE) -r /pcapexample/$(PCAPTESTFILE) 1> stdout.txt 2> stderr.txt
+	valgrind ./$(EXECUTABLE) -r /pcapexample/$(PCAPTESTFILE) -s 192.168.1.105 1> stdout.txt 2> stderr.txt
 	column -t stdout.txt > stdout_formated.txt
 
 testlive: debug
-	./$(EXECUTABLE) -i enp0s3 -t 3
-	make clean
+	./$(EXECUTABLE) -i enp0s3 -t 3 -s 192.168.1.105
 
 testliverel: compile
-	./$(EXECUTABLE) -i enp0s3 -t 3
+	./$(EXECUTABLE) -i enp0s3 -t 3 -s 192.168.1.105
 
 clean:
 ifneq (,$(wildcard *.o))

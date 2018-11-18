@@ -213,6 +213,9 @@ void processOnePacket(const unsigned char *packet, std::shared_ptr<DNSStatistic>
           DPRINTF("protocol TCP (%d); ", my_ip->ip_p);
           struct tcphdr *tcpHeader = (struct tcphdr *)(packet + SIZE_ETHERNET + size_ip);
           unsigned int headerSize = getTcpHeaderSize(tcpHeader);
+          // break if payload is to small to carry full dns header
+          if ((htons(my_ip->ip_len) - headerSize) < 12)
+            break;
           // ignoring from statistics when tcp carries DNS payload in multiple segmets
           if (!isTcpMessageSegmented(tcpHeader)) {
             // dns message is after 2B specifiing length
@@ -228,7 +231,10 @@ void processOnePacket(const unsigned char *packet, std::shared_ptr<DNSStatistic>
         } break;
         case 17: { // UDP protocol
           DPRINTF("protocol UDP (%d); ", my_ip->ip_p);
-          // struct udphdr *my_udp = (struct udphdr *)(packet + SIZE_ETHERNET + size_ip);
+          struct udphdr *my_udp = (struct udphdr *)(packet + SIZE_ETHERNET + size_ip);
+          // break if payload is to small to carry full dns header
+          if ((htons(my_udp->len) - sizeof(my_udp)) < 12)
+            break;
           // parse dns packet to response
           parseDnsData(
             packet + SIZE_ETHERNET + size_ip + sizeof(struct udphdr),

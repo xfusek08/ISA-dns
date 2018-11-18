@@ -10,6 +10,9 @@
 
 #include <iostream>
 #include <string>
+#include <arpa/inet.h>
+#include <sys/time.h>
+#include <math.h>
 
 #include "utils.hpp"
 
@@ -47,4 +50,55 @@ void utils::raisePerror(const char *message, const bool checkHelp) {
   else
     perror("");
   utils::raiseError(nullptr, checkHelp);
+}
+
+string utils::addrinfo_getAddrString(const struct sockaddr *addrinfo) {
+  string res = "";
+  unsigned int maxLen = INET6_ADDRSTRLEN + 1;
+  char buff[maxLen];
+
+  switch(addrinfo->sa_family) {
+   case AF_INET:
+      inet_ntop(AF_INET,
+        &(((struct sockaddr_in *)addrinfo)->sin_addr),
+        buff, maxLen);
+        res = string(buff);
+      break;
+    case AF_INET6:
+      inet_ntop(AF_INET,
+        &(((struct sockaddr_in *)addrinfo)->sin_addr),
+        buff, maxLen);
+        res = string(buff);
+      break;
+    default:
+      break;
+  }
+  return res;
+}
+
+/**
+ * @brief Get the Act Time Stamp String object
+ * Code ispired by example at https://stackoverflow.com/questions/3673226/how-to-print-time-in-format-2009-08-10-181754-811
+ */
+string utils::getActTimeStampString() {
+  int millisec;
+  struct tm* timeInfo;
+  struct timeval tv;
+  char buffer1 [50];
+  char buffer2 [50];
+
+  gettimeofday(&tv, NULL);
+
+  millisec = lrint(tv.tv_usec/1000.0); // Round to nearest millisec
+  if (millisec>=1000) { // Allow for rounding up to nearest second
+    millisec -=1000;
+    tv.tv_sec++;
+  }
+  timeInfo = localtime(&tv.tv_sec);
+
+  /* 2018-09-20T22:14:15.003Z */
+  strftime(buffer1, 50, "%Y-%m-%dT%H:%M:%S", timeInfo);
+  sprintf(buffer2, "%s.%03dZ", buffer1, millisec);
+
+  return string(buffer2);
 }

@@ -32,11 +32,15 @@ public:
   ~DNSStatistic();
   void addAnswerRecord(const SDnsAnswerRecord&);
   void addAnswerRecords(const std::vector<SDnsAnswerRecord>&);
-  bool initializeSyslogServer(const std::string&);
+  bool initSyslogServer(const std::string&);
+  void deinitSyslogServer();
   void sendToSyslog();
   void printStatistics();
+  std::string statToString(const SDnsStatRecord &);
 private:
   bool _isSyslogInitialized;
+  int _syslogSocket;
+  std::string _localAddrString;
   std::vector<SDnsStatRecord> _statistics;
   std::string answerRecToString(const SDnsAnswerRecord&);
 };
