@@ -122,7 +122,7 @@ public:
   bool resolveAnswers(unsigned short count);
 
   /**
-   * @brief Private method to resolve domain name coded inside of DNS response
+   * @brief Resolves domain name coded inside of DNS response
    *
    * It counts with pointers and as result is returned complete
    * string of gained domain name.

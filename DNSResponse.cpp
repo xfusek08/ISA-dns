@@ -184,7 +184,7 @@ bool DNSResponse::resolveAnswers(unsigned short count) {
 }
 
 /**
- * @brief Private method to resolve domain name coded inside of DNS response
+ * @brief Resolve domain name coded inside of DNS response
  *
  * (See DNSResponse.hpp for more info.)
  */
