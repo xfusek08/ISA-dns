@@ -332,6 +332,7 @@ bool beginLiveDnsAnalysis(utils::ProgramOptions options, std::shared_ptr<DNSStat
 
     if (glb_pcap_sendToSyslogFlag == 1) {
       if (!statObj->sendToSyslog()) {
+        DWRITE("sendToSyslog failed");
         pcap_close(glb_pcapHandle);
         return false;
       }
