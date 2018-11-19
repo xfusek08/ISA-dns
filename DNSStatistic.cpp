@@ -180,7 +180,7 @@ void DNSStatistic::deinitSyslogServer() {
 bool DNSStatistic::sendToSyslog() {
   DWRITE("sendToSyslog ... (" << _isSyslogInitialized << ")");
   if (!_isSyslogInitialized)
-    return false;
+    return true;
 
   string message;
   unsigned int errorCnt = 0;
