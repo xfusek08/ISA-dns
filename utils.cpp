@@ -56,13 +56,13 @@ void utils::raisePerror(const char *message, const bool checkHelp) {
 /**
  * @brief Translates sockaddr to readable string representation.
  *
+ * Code ispired by code at: https://gist.github.com/jkomyno/45bee6e79451453c7bbdc22d033a282e
  * (see utils.hpp for more info.)
  */
 string utils::addrinfo_getAddrString(const struct sockaddr *addrinfo) {
   string res = "";
   unsigned int maxLen = INET6_ADDRSTRLEN + 1;
   char buff[maxLen];
-
   switch(addrinfo->sa_family) {
    case AF_INET:
       inet_ntop(AF_INET,
@@ -71,8 +71,8 @@ string utils::addrinfo_getAddrString(const struct sockaddr *addrinfo) {
         res = string(buff);
       break;
     case AF_INET6:
-      inet_ntop(AF_INET,
-        &(((struct sockaddr_in *)addrinfo)->sin_addr),
+      inet_ntop(AF_INET6,
+        &(((struct sockaddr_in6 *)addrinfo)->sin6_addr),
         buff, maxLen);
         res = string(buff);
       break;
@@ -84,6 +84,7 @@ string utils::addrinfo_getAddrString(const struct sockaddr *addrinfo) {
 
 /**
  * @brief Get the Act Time Stamp String object
+ *
  * Code ispired by example at https://stackoverflow.com/questions/3673226/how-to-print-time-in-format-2009-08-10-181754-811
  * (see utils.hpp for more info.)
  */

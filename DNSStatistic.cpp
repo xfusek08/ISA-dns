@@ -64,6 +64,7 @@ void DNSStatistic::addAnswerRecord(const SDnsAnswerRecord& record) {
 
 /**
  * @brief Adds vector of SDnsAnswerRecords to statistics via addAnswerRecord method.
+ *
  * (See DNSStatistic.hpp for more info.)
  */
 void DNSStatistic::addAnswerRecords(const std::vector<SDnsAnswerRecord>& records) {
@@ -93,7 +94,7 @@ bool DNSStatistic::initSyslogServer(const std::string& servername) {
 
   DWRITE("Connecting to syslog server: \"" << servername << "\"");
 
-  // lets get available ip addresses for ginev syslog server
+  // lets get available ip addresses for syslog server
   errCode = getaddrinfo(servername.c_str(), SYSLOG_PORT_NUMBER_TXT, &hints, &resultAddrs);
   if (errCode != 0) {
     fprintf(stderr,
@@ -142,14 +143,15 @@ bool DNSStatistic::initSyslogServer(const std::string& servername) {
 
   // connetion was successfull
 
-  struct sockaddr localAddr;
-  unsigned int len = sizeof(localAddr);
-  if (getsockname(_syslogSocket, &localAddr, &len) != 0){
+  // get local address
+  struct sockaddr_storage localAddr;
+  memset(&localAddr, 0, sizeof(struct sockaddr_storage));
+  unsigned int len = sizeof(struct sockaddr_storage);
+  if (getsockname(_syslogSocket, (struct sockaddr *)(&localAddr), &len) != 0) {
     cerr << "Error: cannot resolve local IP address.\n";
     return false;
   }
-
-  _localAddrString = utils::addrinfo_getAddrString(&localAddr);
+  _localAddrString = utils::addrinfo_getAddrString((struct sockaddr *)&localAddr);
   DWRITE("Local IP address: " << _localAddrString);
 
   _isSyslogInitialized = true;
@@ -158,6 +160,7 @@ bool DNSStatistic::initSyslogServer(const std::string& servername) {
 
 /**
  * @brief Disconnect from syslog server.
+ *
  * (See DNSStatistic.hpp for more info.)
  */
 void DNSStatistic::deinitSyslogServer() {
@@ -171,6 +174,7 @@ void DNSStatistic::deinitSyslogServer() {
 
 /**
  * @brief Send all statistics to syslog server.
+ *
  * (See DNSStatistic.hpp for more info.)
  */
 bool DNSStatistic::sendToSyslog() {
